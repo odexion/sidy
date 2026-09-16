@@ -14,7 +14,8 @@ static void await(void (^body)(dispatch_block_t done)) {
     dispatch_semaphore_wait(semaphore, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC));
 }
 
-/// Prints the current track as one JSON object: title, artist, album, playing, bundle, app.
+/// Prints the current track as one JSON object:
+/// title, artist, album, duration, elapsed, timestamp, playing, bundle, app.
 void mb_info(void *perl, void *cv) {
     void (*getInfo)(dispatch_queue_t, void (^)(NSDictionary *)) = remote("MRMediaRemoteGetNowPlayingInfo");
     void (*getPlaying)(dispatch_queue_t, void (^)(BOOL)) = remote("MRMediaRemoteGetNowPlayingApplicationIsPlaying");
@@ -32,6 +33,10 @@ void mb_info(void *perl, void *cv) {
             result[@"title"] = info[@"kMRMediaRemoteNowPlayingInfoTitle"];
             result[@"artist"] = info[@"kMRMediaRemoteNowPlayingInfoArtist"];
             result[@"album"] = info[@"kMRMediaRemoteNowPlayingInfoAlbum"];
+            result[@"duration"] = info[@"kMRMediaRemoteNowPlayingInfoDuration"];
+            result[@"elapsed"] = info[@"kMRMediaRemoteNowPlayingInfoElapsedTime"];
+            NSDate *timestamp = info[@"kMRMediaRemoteNowPlayingInfoTimestamp"];
+            if (timestamp) result[@"timestamp"] = @(timestamp.timeIntervalSince1970);
             done();
         });
     });
@@ -54,14 +59,26 @@ void mb_info(void *perl, void *cv) {
     fflush(stdout);
 }
 
+// Commands are delivered asynchronously; give them a moment before perl exits.
+static void settle(void) {
+    [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.3]];
+}
+
 static void send(int command) {
     Boolean (*sendCommand)(int, NSDictionary *) = remote("MRMediaRemoteSendCommand");
     if (!sendCommand) return;
     sendCommand(command, nil);
-    // The command is delivered asynchronously; give it a moment before perl exits.
-    [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.3]];
+    settle();
 }
 
 void mb_toggle(void *perl, void *cv) { send(2); }
 void mb_next(void *perl, void *cv) { send(4); }
 void mb_previous(void *perl, void *cv) { send(5); }
+
+void mb_seek(void *perl, void *cv) {
+    void (*setElapsed)(double) = remote("MRMediaRemoteSetElapsedTime");
+    const char *value = getenv("MB_SEEK");
+    if (!setElapsed || !value) return;
+    setElapsed(atof(value));
+    settle();
+}

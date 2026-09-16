@@ -203,7 +203,7 @@ private struct MediaCard: View {
         let badge = media.source.map { Badge(text: $0, color: media.isPlaying ? Theme.accent : Theme.muted) }
         Card(index: index, title: "Now Playing", badge: badge) {
             HStack(spacing: 10) {
-                DotDisc(active: media.isPlaying).frame(width: 40, height: 40)
+                DotDisc(active: media.isPlaying).frame(width: 34, height: 34)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(media.title ?? "Nothing playing").font(Theme.body).foregroundStyle(Theme.ink)
                     Text(media.artist ?? "Spotify · YT Music").font(Theme.label).foregroundStyle(Theme.muted)
@@ -211,21 +211,33 @@ private struct MediaCard: View {
                 .lineLimit(1)
             }
             Spacer(minLength: 0)
-            HStack(spacing: 18) {
-                Spacer()
-                control("backward.end.fill", size: 9, action: media.previous)
-                Button(action: media.playPause) {
-                    Image(systemName: media.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 9))
-                        .foregroundStyle(Theme.accent)
-                        .frame(width: 26, height: 26)
-                        .overlay(Circle().strokeBorder(Theme.accent, lineWidth: 1.2))
-                        .contentShape(Circle())
+            SeekBar()
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                HStack(spacing: 0) {
+                    Text(media.duration == nil ? "" : Format.clock(media.position(at: context.date)))
+                        .frame(width: 30, alignment: .leading)
+                    Spacer(minLength: 0)
+                    HStack(spacing: 12) {
+                        control("backward.end.fill", size: 9, action: media.previous)
+                        Button(action: media.playPause) {
+                            Image(systemName: media.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 9))
+                                .foregroundStyle(Theme.accent)
+                                .frame(width: 26, height: 26)
+                                .overlay(Circle().strokeBorder(Theme.accent, lineWidth: 1.2))
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        control("forward.end.fill", size: 9, action: media.next)
+                    }
+                    Spacer(minLength: 0)
+                    Text(media.duration.map(Format.clock) ?? "")
+                        .frame(width: 30, alignment: .trailing)
                 }
-                .buttonStyle(.plain)
-                control("forward.end.fill", size: 9, action: media.next)
-                Spacer()
+                .font(Theme.label)
+                .foregroundStyle(Theme.muted)
             }
+            .padding(.top, 6)
             .disabled(media.source == nil)
             .opacity(media.source == nil ? 0.35 : 1)
         }
@@ -236,6 +248,34 @@ private struct MediaCard: View {
             Image(systemName: symbol).font(.system(size: size)).foregroundStyle(Theme.ink).padding(4).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Dotted progress bar; click or drag anywhere on it to seek.
+private struct SeekBar: View {
+    @Environment(NowPlaying.self) private var media
+    @State private var scrub: Double?
+
+    var body: some View {
+        GeometryReader { proxy in
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let progress = media.duration.map { media.position(at: context.date) / $0 } ?? 0
+                DotMeter(fraction: scrub ?? progress, count: 30, alert: scrub != nil)
+                    .frame(height: 6)
+                    .frame(maxHeight: .infinity)
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { scrub = min(max($0.location.x / proxy.size.width, 0), 1) }
+                    .onEnded { _ in
+                        if let scrub, let duration = media.duration { media.seek(to: scrub * duration) }
+                        scrub = nil
+                    }
+            )
+        }
+        .frame(height: 14)
+        .disabled(media.duration == nil)
     }
 }
 

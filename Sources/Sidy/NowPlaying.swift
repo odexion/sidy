@@ -8,7 +8,10 @@ final class NowPlaying {
     var title: String?
     var artist: String?
     var isPlaying = false
+    var duration: Double?
     private(set) var source: String?
+    private var elapsed = 0.0
+    private var elapsedAt = Date()
 
     private let prefs: Preferences
     private var timer: Timer?
@@ -58,9 +61,21 @@ final class NowPlaying {
     func next() { send("mb_next") }
     func previous() { send("mb_previous") }
 
-    private func send(_ command: String) {
+    /// Playback position, extrapolated from the last report while playing.
+    func position(at date: Date = Date()) -> Double {
+        let position = elapsed + (isPlaying ? date.timeIntervalSince(elapsedAt) : 0)
+        return min(max(position, 0), duration ?? position)
+    }
+
+    func seek(to seconds: Double) {
+        elapsed = seconds
+        elapsedAt = Date()
+        send("mb_seek", environment: ["MB_SEEK": String(seconds)])
+    }
+
+    private func send(_ command: String, environment: [String: String] = [:]) {
         DispatchQueue.global(qos: .userInitiated).async {
-            _ = Self.call(command)
+            _ = Self.call(command, environment: environment)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self.poll() }
         }
     }
@@ -71,6 +86,9 @@ final class NowPlaying {
         artist = info["artist"] as? String
         isPlaying = title != nil && info["playing"] as? Bool == true
         source = title == nil ? nil : Self.sourceName(info)
+        duration = (info["duration"] as? Double).flatMap { $0 > 0 ? $0 : nil }
+        elapsed = info["elapsed"] as? Double ?? 0
+        elapsedAt = (info["timestamp"] as? Double).map { Date(timeIntervalSince1970: $0) } ?? Date()
     }
 
     /// Browsers don't say which site is playing. YouTube Music sends an album, plain YouTube videos don't.
@@ -81,7 +99,7 @@ final class NowPlaying {
         return info["app"] as? String
     }
 
-    private static func call(_ function: String) -> Data? {
+    private static func call(_ function: String, environment: [String: String] = [:]) -> Data? {
         guard let bridge else { return nil }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
@@ -93,6 +111,7 @@ final class NowPlaying {
             DynaLoader::dl_install_xsub("main::run", $symbol);
             run();
             """, bridge, function]
+        process.environment = ProcessInfo.processInfo.environment.merging(environment) { $1 }
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice

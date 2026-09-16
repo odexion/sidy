@@ -310,6 +310,12 @@ enum Format {
         return "\(value) \(unit)/s"
     }
 
+    /// Track time, e.g. "3:07".
+    static func clock(_ seconds: Double) -> String {
+        let total = max(0, Int(seconds))
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
     static func duration(_ interval: TimeInterval) -> String {
         let minutes = max(0, Int(interval / 60))
         switch minutes {
