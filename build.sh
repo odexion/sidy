@@ -1,30 +1,40 @@
 #!/bin/zsh
-# Builds Sidy.app into ./build. Pass --install to copy it to ~/Applications and launch it.
+# Builds Sidy.app (Apple silicon) into ./build.
+#   --install  copy it to ~/Applications and launch it
+#   --release  also zip it as build/Sidy-<version>-arm64.zip
 set -euo pipefail
 cd "$(dirname "$0")"
 
-swift build -c release --product Sidy
-swift build -c release --product MediaBridge
+VERSION=1.0.0
+BUILD=1
+
+swift build -c release --arch arm64 --product Sidy
+swift build -c release --arch arm64 --product MediaBridge
+BIN=$(swift build -c release --arch arm64 --show-bin-path)
+
 APP=build/Sidy.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
-cp .build/release/Sidy "$APP/Contents/MacOS/Sidy"
-cp .build/release/libMediaBridge.dylib "$APP/Contents/Frameworks/"
-cp Resources/Doto.ttf Resources/*.svg "$APP/Contents/Resources/"
+cp "$BIN/Sidy" "$APP/Contents/MacOS/Sidy"
+cp "$BIN/libMediaBridge.dylib" "$APP/Contents/Frameworks/"
+cp Resources/Doto.ttf Resources/Doto-OFL.txt Resources/*.svg Resources/AppIcon.icns "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleIdentifier</key><string>com.zaf4.sidy</string>
+    <key>CFBundleIdentifier</key><string>com.odexion.sidy</string>
     <key>CFBundleName</key><string>Sidy</string>
+    <key>CFBundleDisplayName</key><string>Sidy</string>
     <key>CFBundleExecutable</key><string>Sidy</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.0</string>
-    <key>CFBundleVersion</key><string>1</string>
+    <key>CFBundleShortVersionString</key><string>$VERSION</string>
+    <key>CFBundleVersion</key><string>$BUILD</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
+    <key>NSHumanReadableCopyright</key><string>© 2026 Odexion</string>
 </dict>
 </plist>
 EOF
@@ -33,11 +43,21 @@ codesign --force --sign - "$APP/Contents/Frameworks/libMediaBridge.dylib"
 codesign --force --sign - "$APP"
 echo "Built $APP"
 
-if [[ "${1:-}" == "--install" ]]; then
-    pkill -x Sidy || true
-    mkdir -p ~/Applications
-    rm -rf ~/Applications/Sidy.app
-    cp -R "$APP" ~/Applications/
-    open ~/Applications/Sidy.app
-    echo "Installed to ~/Applications/Sidy.app"
-fi
+for arg in "$@"; do
+    case "$arg" in
+    --release)
+        ZIP="build/Sidy-$VERSION-arm64.zip"
+        rm -f "$ZIP"
+        ditto -c -k --keepParent "$APP" "$ZIP"
+        echo "Packaged $ZIP"
+        ;;
+    --install)
+        pkill -x Sidy || true
+        mkdir -p ~/Applications
+        rm -rf ~/Applications/Sidy.app
+        cp -R "$APP" ~/Applications/
+        open ~/Applications/Sidy.app
+        echo "Installed to ~/Applications/Sidy.app"
+        ;;
+    esac
+done
