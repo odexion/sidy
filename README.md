@@ -37,6 +37,17 @@ Sidy sits on the edge of your desktop as a slim pill of gauges. Hover a tile to 
 
 Requires an Apple silicon Mac running macOS 14 or later.
 
+```sh
+curl -fsSL https://raw.githubusercontent.com/odexion/sidy/main/scripts/install.sh | sh
+```
+
+This installs the latest release into `/Applications` (or `~/Applications` if `/Applications` isn't writable), then opens it. It doesn't need sudo. Run the same command again to update; a running Sidy is quit and relaunched.
+
+Options go in environment variables. For example, `SIDY_VERSION=v1.0.0` installs a specific release and `SIDY_NO_LAUNCH=1` skips opening Sidy afterwards. Run the script with `--help` to see them all.
+
+<details>
+<summary>Manual install</summary>
+
 1. Download `Sidy-<version>-arm64.zip` from [Releases](https://github.com/odexion/sidy/releases) and unzip it.
 2. Move `Sidy.app` to `/Applications`.
 3. Sidy is not notarized, so macOS blocks it the first time you open it. Remove the quarantine flag:
@@ -44,6 +55,8 @@ Requires an Apple silicon Mac running macOS 14 or later.
    xattr -dr com.apple.quarantine /Applications/Sidy.app
    ```
    Or open it once, then go to **System Settings → Privacy & Security** and click **Open Anyway**.
+
+</details>
 
 Sidy runs from the menu bar and has no Dock icon. It sits at desktop level, so it shows whenever the desktop is visible.
 
