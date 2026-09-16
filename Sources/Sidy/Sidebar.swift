@@ -1,4 +1,3 @@
-import ServiceManagement
 import SwiftUI
 
 struct Sidebar: View {
@@ -70,42 +69,5 @@ private struct Header: View {
         }
         .padding(.leading, 4)
         .shadow(color: .black.opacity(0.6), radius: 6)
-    }
-}
-
-struct SettingsView: View {
-    @Environment(Preferences.self) private var prefs
-    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
-
-    var body: some View {
-        @Bindable var prefs = prefs
-        List {
-            Section("Modules · drag to reorder") {
-                ForEach(prefs.order) { module in
-                    Toggle(module.title, isOn: Binding(
-                        get: { !prefs.hidden.contains(module) },
-                        set: { _ in prefs.toggle(module) }
-                    ))
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                }
-                .onMove { prefs.order.move(fromOffsets: $0, toOffset: $1) }
-            }
-
-            Section("Layout") {
-                Picker("Screen edge", selection: $prefs.edge) {
-                    Text("Left").tag(SidebarEdge.left)
-                    Text("Right").tag(SidebarEdge.right)
-                }
-                .pickerStyle(.segmented)
-                Toggle("Detailed style", isOn: $prefs.detailed).toggleStyle(.switch).controlSize(.mini)
-                Toggle("Show header", isOn: $prefs.showHeader).toggleStyle(.switch).controlSize(.mini)
-                Toggle("Launch at login", isOn: $launchAtLogin).toggleStyle(.switch).controlSize(.mini)
-                    .onChange(of: launchAtLogin) { _, enabled in
-                        try? enabled ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
-                        launchAtLogin = SMAppService.mainApp.status == .enabled
-                    }
-            }
-        }
     }
 }

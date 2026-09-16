@@ -84,11 +84,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func openSettings() {
         if settingsWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 340, height: 560),
-                                  styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            let hosting = NSHostingView(rootView: SettingsView().environment(prefs))
+            let window = NSWindow(contentRect: NSRect(origin: .zero, size: hosting.fittingSize),
+                                  styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
             window.title = "Sidy"
+            window.titleVisibility = .hidden
+            window.titlebarAppearsTransparent = true
+            window.isMovableByWindowBackground = true
+            window.appearance = NSAppearance(named: .darkAqua)
+            window.backgroundColor = NSColor(white: 0.055, alpha: 1)
             window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: SettingsView().environment(prefs))
+            window.contentView = hosting
             window.center()
             settingsWindow = window
         }
