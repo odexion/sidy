@@ -25,7 +25,7 @@ enum Module: String, CaseIterable, Identifiable {
         switch self {
         case .cpu: .symbol("cpu")
         case .gpu: .asset("gpu")
-        case .memory: .symbol("memorychip")
+        case .memory: .asset("ram")
         case .storage: .symbol("internaldrive")
         case .network: .symbol("arrow.up.arrow.down")
         case .claude: .asset("claude")

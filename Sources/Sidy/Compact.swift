@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// Slim pill of icon tiles. Hovering a tile shows its detailed card beside the pill; clicking pins it.
@@ -9,9 +8,11 @@ struct CompactBar: View {
     @State private var hovered: Module?
     @State private var pinned: Module?
     @State private var hideWork: DispatchWorkItem?
-    @State private var dragging: Module?
+    @State private var drag: TileDrag?
 
     private static let gap: CGFloat = 12
+    private static let spacing: CGFloat = 6
+    private static var pitch: CGFloat { ModuleTile.height + spacing }
 
     init(openSettings: @escaping () -> Void, pinned: Module? = nil) {
         self.openSettings = openSettings
@@ -21,20 +22,24 @@ struct CompactBar: View {
     var body: some View {
         let modules = prefs.visible
         VStack(spacing: 10) {
-            VStack(spacing: 6) {
+            VStack(spacing: Self.spacing) {
                 ForEach(modules) { module in
-                    ModuleTile(module: module, highlighted: shown == module, pinned: pinned == module)
+                    let isDragged = drag?.module == module
+                    ModuleTile(module: module, highlighted: shown == module || isDragged, pinned: pinned == module)
                         .anchorPreference(key: TileBounds.self, value: .bounds) { [module: $0] }
+                        .scaleEffect(isDragged ? 1.08 : 1)
+                        .shadow(color: .black.opacity(isDragged ? 0.5 : 0), radius: 8, y: 4)
+                        .offset(y: isDragged ? drag?.offset ?? 0 : 0)
+                        .zIndex(isDragged ? 1 : 0)
                         .onHover { $0 ? show(module) : scheduleHide() }
-                        .onDrag {
-                            dragging = module
-                            hovered = nil
-                            return NSItemProvider(object: module.rawValue as NSString)
-                        }
-                        .onDrop(of: [.text], delegate: TileDrop(target: module, dragging: $dragging, prefs: prefs))
                         .onTapGesture {
                             withAnimation(.easeOut(duration: 0.15)) { pinned = pinned == module ? nil : module }
                         }
+                        .gesture(
+                            DragGesture(minimumDistance: 4, coordinateSpace: .global)
+                                .onChanged { dragChanged(module, translation: $0.translation.height) }
+                                .onEnded { _ in withAnimation(.spring(duration: 0.25)) { drag = nil } }
+                        )
                         .contextMenu {
                             Button("Hide \(module.title)") { prefs.toggle(module) }
                             Button("Settings…", action: openSettings)
@@ -64,7 +69,7 @@ struct CompactBar: View {
         .animation(.easeOut(duration: 0.15), value: shown)
     }
 
-    private var shown: Module? { hovered ?? pinned }
+    private var shown: Module? { drag == nil ? hovered ?? pinned : nil }
 
     private var pill: some View {
         Capsule(style: .continuous)
@@ -76,10 +81,36 @@ struct CompactBar: View {
             .shadow(color: .black.opacity(0.5), radius: 14, y: 8)
     }
 
+    /// The tile follows the pointer; crossing half a slot swaps it with its neighbour.
+    private func dragChanged(_ module: Module, translation: CGFloat) {
+        if drag?.module != module {
+            drag = TileDrag(module: module)
+            hovered = nil
+        }
+        guard var current = drag else { return }
+        current.offset = translation - current.shift
+
+        let visible = prefs.visible
+        if let index = visible.firstIndex(of: module) {
+            let step = current.offset > Self.pitch / 2 ? 1 : current.offset < -Self.pitch / 2 ? -1 : 0
+            if step != 0, visible.indices.contains(index + step) {
+                let neighbour = visible[index + step]
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    var order = prefs.order
+                    order.removeAll { $0 == module }
+                    let target = order.firstIndex(of: neighbour)! + (step > 0 ? 1 : 0)
+                    order.insert(module, at: target)
+                    prefs.order = order
+                }
+                current.shift += CGFloat(step) * Self.pitch
+                current.offset -= CGFloat(step) * Self.pitch
+            }
+        }
+        drag = current
+    }
+
     private func show(_ module: Module) {
-        // A drag that ended outside the pill never reports a drop, so clear it once the button is up.
-        if dragging != nil, NSEvent.pressedMouseButtons == 0 { dragging = nil }
-        guard dragging == nil else { return }
+        guard drag == nil else { return }
         hideWork?.cancel()
         hovered = module
     }
@@ -93,27 +124,10 @@ struct CompactBar: View {
     }
 }
 
-/// Reorders live while a tile is dragged over its neighbours.
-private struct TileDrop: DropDelegate {
-    let target: Module
-    @Binding var dragging: Module?
-    let prefs: Preferences
-
-    func dropEntered(info: DropInfo) {
-        guard let dragging, dragging != target,
-              let from = prefs.order.firstIndex(of: dragging),
-              let to = prefs.order.firstIndex(of: target) else { return }
-        withAnimation(.easeInOut(duration: 0.18)) {
-            prefs.order.move(fromOffsets: [from], toOffset: to > from ? to + 1 : to)
-        }
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
-
-    func performDrop(info: DropInfo) -> Bool {
-        dragging = nil
-        return true
-    }
+private struct TileDrag {
+    let module: Module
+    var offset: CGFloat = 0     // visual offset from the tile's current slot
+    var shift: CGFloat = 0      // distance already absorbed by swaps
 }
 
 /// The "•••" under the pill; a generous hit area since it sits on the bare desktop.
@@ -145,6 +159,8 @@ private struct TileBounds: PreferenceKey {
 
 /// A dotted progress ring around the module's icon, with a short value underneath.
 private struct ModuleTile: View {
+    static let height: CGFloat = 64
+
     let module: Module
     let highlighted: Bool
     let pinned: Bool
@@ -176,8 +192,7 @@ private struct ModuleTile: View {
                 .lineLimit(1)
                 .fixedSize()
         }
-        .frame(width: 46)
-        .padding(.vertical, 5)
+        .frame(width: 46, height: Self.height)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(.white.opacity(highlighted ? 0.07 : 0))
