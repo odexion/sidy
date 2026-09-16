@@ -1,0 +1,121 @@
+import AppKit
+import SwiftUI
+
+@main
+enum Main {
+    static let delegate = AppDelegate()
+
+    static func main() {
+        let app = NSApplication.shared
+        app.delegate = delegate
+        app.setActivationPolicy(.accessory)
+        app.run()
+    }
+}
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    let prefs = Preferences()
+    let system = SystemMonitor()
+    let usage = AIUsage()
+    lazy var media = NowPlaying(prefs: prefs)
+
+    private var panel: NSPanel!
+    private var statusItem: NSStatusItem!
+    private var settingsWindow: NSWindow?
+    private var snapshotPinned: Module?
+
+    func applicationDidFinishLaunching(_ note: Notification) {
+        registerFont()
+
+        let args = CommandLine.arguments
+        if let i = args.firstIndex(of: "--snapshot"), i + 1 < args.count {
+            snapshotPinned = args.dropFirst(i + 2).first.flatMap(Module.init)
+            snapshot(to: args[i + 1])
+            return
+        }
+
+        system.start()
+        usage.start()
+        media.start()
+
+        panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        // SIDY_FLOATING=1 keeps the panel above windows, handy while developing.
+        panel.level = ProcessInfo.processInfo.environment["SIDY_FLOATING"] != nil
+            ? .floating : NSWindow.Level(Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
+        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        panel.contentView = NSHostingView(rootView: sidebar)
+        placePanel()
+        panel.orderFrontRegardless()
+
+        prefs.onLayoutChange = { [weak self] in self?.placePanel() }
+        NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.placePanel()
+        }
+
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem.button?.image = NSImage(systemSymbolName: "circle.grid.3x3", accessibilityDescription: "Sidy")
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        menu.addItem(withTitle: "Refresh AI Usage", action: #selector(refreshUsage), keyEquivalent: "r").target = self
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit Sidy", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        statusItem.menu = menu
+    }
+
+    private var sidebar: some View {
+        Sidebar(openSettings: { [weak self] in self?.openSettings() }, pinned: snapshotPinned)
+            .environment(prefs)
+            .environment(system)
+            .environment(usage)
+            .environment(media)
+    }
+
+    /// A full-height transparent strip on the chosen edge; empty areas pass clicks through.
+    private func placePanel() {
+        guard let screen = NSScreen.main else { return }
+        let area = screen.visibleFrame
+        let width = Sidebar.maxWidth
+        let x = prefs.edge == .left ? area.minX : area.maxX - width
+        panel.setFrame(NSRect(x: x, y: area.minY, width: width, height: area.height), display: true)
+    }
+
+    @objc func openSettings() {
+        if settingsWindow == nil {
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 340, height: 560),
+                                  styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            window.title = "Sidy"
+            window.isReleasedWhenClosed = false
+            window.contentView = NSHostingView(rootView: SettingsView().environment(prefs))
+            window.center()
+            settingsWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        settingsWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    @objc func refreshUsage() { usage.refresh() }
+
+    private func registerFont() {
+        guard let url = Resource.url("Doto", "ttf") else { return }
+        CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+    }
+
+    /// Dev helper: renders the sidebar with live data to a PNG and exits.
+    private func snapshot(to path: String) {
+        system.start()
+        usage.refresh()
+        media.poll()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [self] in
+            let renderer = ImageRenderer(content: sidebar.frame(width: Sidebar.maxWidth, height: 1000).background(Color(white: 0.05)))
+            renderer.scale = 2
+            if let tiff = renderer.nsImage?.tiffRepresentation,
+               let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+                try? png.write(to: URL(fileURLWithPath: path))
+            }
+            NSApp.terminate(nil)
+        }
+    }
+}
