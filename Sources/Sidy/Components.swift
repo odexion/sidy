@@ -9,13 +9,13 @@ enum Resource {
         return FileManager.default.fileExists(atPath: local.path) ? local : nil
     }
 
-    private static var brands: [String: NSImage] = [:]
+    private static var images: [String: NSImage] = [:]
 
-    static func brand(_ name: String) -> NSImage? {
-        if let image = brands[name] { return image }
+    static func image(_ name: String) -> NSImage? {
+        if let image = images[name] { return image }
         guard let url = url(name, "svg"), let image = NSImage(contentsOf: url) else { return nil }
         image.isTemplate = true
-        brands[name] = image
+        images[name] = image
         return image
     }
 }
@@ -27,8 +27,8 @@ struct IconView: View {
         switch icon {
         case .symbol(let name):
             Image(systemName: name).resizable().scaledToFit()
-        case .brand(let name):
-            if let image = Resource.brand(name) {
+        case .asset(let name):
+            if let image = Resource.image(name) {
                 Image(nsImage: image).resizable().renderingMode(.template).scaledToFit()
             }
         }

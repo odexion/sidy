@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Slim pill of icon tiles. Hovering a tile shows its detailed card beside the pill; clicking pins it.
@@ -8,6 +9,7 @@ struct CompactBar: View {
     @State private var hovered: Module?
     @State private var pinned: Module?
     @State private var hideWork: DispatchWorkItem?
+    @State private var dragging: Module?
 
     private static let gap: CGFloat = 12
 
@@ -24,6 +26,12 @@ struct CompactBar: View {
                     ModuleTile(module: module, highlighted: shown == module, pinned: pinned == module)
                         .anchorPreference(key: TileBounds.self, value: .bounds) { [module: $0] }
                         .onHover { $0 ? show(module) : scheduleHide() }
+                        .onDrag {
+                            dragging = module
+                            hovered = nil
+                            return NSItemProvider(object: module.rawValue as NSString)
+                        }
+                        .onDrop(of: [.text], delegate: TileDrop(target: module, dragging: $dragging, prefs: prefs))
                         .onTapGesture {
                             withAnimation(.easeOut(duration: 0.15)) { pinned = pinned == module ? nil : module }
                         }
@@ -37,15 +45,7 @@ struct CompactBar: View {
             .padding(.horizontal, 8)
             .background(pill)
 
-            Button(action: openSettings) {
-                HStack(spacing: 4) {
-                    ForEach(0..<3, id: \.self) { _ in Circle().fill(Theme.ink).frame(width: 5, height: 5) }
-                }
-                .padding(6)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .shadow(color: .black.opacity(0.6), radius: 4)
+            SettingsDots(action: openSettings)
         }
         .overlayPreferenceValue(TileBounds.self) { bounds in
             GeometryReader { proxy in
@@ -77,6 +77,9 @@ struct CompactBar: View {
     }
 
     private func show(_ module: Module) {
+        // A drag that ended outside the pill never reports a drop, so clear it once the button is up.
+        if dragging != nil, NSEvent.pressedMouseButtons == 0 { dragging = nil }
+        guard dragging == nil else { return }
         hideWork?.cancel()
         hovered = module
     }
@@ -87,6 +90,48 @@ struct CompactBar: View {
         let work = DispatchWorkItem { hovered = nil }
         hideWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
+    }
+}
+
+/// Reorders live while a tile is dragged over its neighbours.
+private struct TileDrop: DropDelegate {
+    let target: Module
+    @Binding var dragging: Module?
+    let prefs: Preferences
+
+    func dropEntered(info: DropInfo) {
+        guard let dragging, dragging != target,
+              let from = prefs.order.firstIndex(of: dragging),
+              let to = prefs.order.firstIndex(of: target) else { return }
+        withAnimation(.easeInOut(duration: 0.18)) {
+            prefs.order.move(fromOffsets: [from], toOffset: to > from ? to + 1 : to)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
+    }
+}
+
+/// The "•••" under the pill; a generous hit area since it sits on the bare desktop.
+private struct SettingsDots: View {
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { _ in Circle().fill(hovering ? Theme.accent : Theme.ink).frame(width: 5, height: 5) }
+        }
+        .frame(width: 56, height: 30)
+        .background(Capsule().fill(.black.opacity(hovering ? 0.45 : 0.02)))
+        .contentShape(Capsule())
+        .shadow(color: .black.opacity(0.6), radius: 4)
+        .onHover { hovering = $0 }
+        .onTapGesture(perform: action)
+        .help("Settings")
     }
 }
 

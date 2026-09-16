@@ -24,12 +24,12 @@ enum Module: String, CaseIterable, Identifiable {
     var icon: Icon {
         switch self {
         case .cpu: .symbol("cpu")
-        case .gpu: .symbol("cube.transparent")
+        case .gpu: .asset("gpu")
         case .memory: .symbol("memorychip")
         case .storage: .symbol("internaldrive")
         case .network: .symbol("arrow.up.arrow.down")
-        case .claude: .brand("claude")
-        case .codex: .brand("openai")
+        case .claude: .asset("claude")
+        case .codex: .asset("openai")
         case .battery: .symbol("battery.75percent")
         case .media: .symbol("music.note")
         case .system: .symbol("thermometer.medium")
@@ -39,7 +39,7 @@ enum Module: String, CaseIterable, Identifiable {
 
 enum Icon {
     case symbol(String)
-    case brand(String)
+    case asset(String)   // SVG in Resources
 }
 
 enum SidebarEdge: String, CaseIterable {
