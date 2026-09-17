@@ -4,6 +4,8 @@ import SwiftUI
 struct CompactBar: View {
     let openSettings: () -> Void
     @Environment(Preferences.self) private var prefs
+    @Environment(\.revealed) private var revealed
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var hovered: Module?
     @State private var pinned: Module?
@@ -23,9 +25,10 @@ struct CompactBar: View {
         let modules = prefs.visible
         VStack(spacing: 10) {
             VStack(spacing: Self.spacing) {
-                ForEach(modules) { module in
+                ForEach(Array(modules.enumerated()), id: \.element) { index, module in
                     let isDragged = drag?.module == module
                     ModuleTile(module: module, highlighted: shown == module || isDragged, pinned: pinned == module)
+                        .reveal(rank: centerRank(index, of: modules.count))
                         .anchorPreference(key: TileBounds.self, value: .bounds) { [module: $0] }
                         .scaleEffect(isDragged ? 1.08 : 1)
                         .shadow(color: .black.opacity(isDragged ? 0.5 : 0), radius: 8, y: 4)
@@ -51,6 +54,7 @@ struct CompactBar: View {
             .background(pill)
 
             SettingsDots(action: openSettings)
+                .reveal(rank: modules.count / 2 + 1, delay: 0.8, scale: 0.8)
         }
         .overlayPreferenceValue(TileBounds.self) { bounds in
             GeometryReader { proxy in
@@ -71,14 +75,23 @@ struct CompactBar: View {
 
     private var shown: Module? { drag == nil ? hovered ?? pinned : nil }
 
+    /// Opens as a circle at full width that stretches up and down from its middle.
     private var pill: some View {
-        Capsule(style: .continuous)
-            .fill(LinearGradient(colors: [Color(white: 0.15), Color(white: 0.07)], startPoint: .top, endPoint: .bottom))
-            .overlay(
-                Capsule(style: .continuous)
-                    .strokeBorder(LinearGradient(colors: [.white.opacity(0.22), .white.opacity(0.04)], startPoint: .top, endPoint: .bottom), lineWidth: 0.8)
-            )
-            .shadow(color: .black.opacity(0.5), radius: 14, y: 8)
+        GeometryReader { proxy in
+            let open = revealed || reduceMotion
+            Capsule(style: .continuous)
+                .fill(LinearGradient(colors: [Color(white: 0.15), Color(white: 0.07)], startPoint: .top, endPoint: .bottom))
+                .overlay(
+                    Capsule(style: .continuous)
+                        .strokeBorder(LinearGradient(colors: [.white.opacity(0.22), .white.opacity(0.04)], startPoint: .top, endPoint: .bottom), lineWidth: 0.8)
+                )
+                .shadow(color: .black.opacity(0.5), radius: 14, y: 8)
+                .frame(height: open ? proxy.size.height : proxy.size.width)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(Reveal.unfold, value: revealed)
+                .opacity(revealed ? 1 : 0)
+                .animation(.easeOut(duration: 0.6), value: revealed)
+        }
     }
 
     /// The tile follows the pointer; crossing half a slot swaps it with its neighbour.
@@ -168,13 +181,15 @@ private struct ModuleTile: View {
     @Environment(SystemMonitor.self) private var system
     @Environment(AIUsage.self) private var usage
     @Environment(NowPlaying.self) private var media
+    @Environment(\.revealed) private var revealed
 
     var body: some View {
         let metric = self.metric
         VStack(spacing: 4) {
             ZStack {
                 if let fraction = metric.fraction {
-                    DotRing(fraction: fraction, ticks: 36, tickLength: 3.5, innerDots: false)
+                    // Sweeps up from empty as the tile is revealed.
+                    DotRing(fraction: revealed ? fraction : 0, ticks: 36, tickLength: 3.5, innerDots: false)
                 } else {
                     DotDisc(active: media.isPlaying)
                         .opacity(0.8)

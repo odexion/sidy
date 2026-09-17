@@ -179,11 +179,16 @@ struct DotMeter: View {
 }
 
 /// Radial tick gauge with a dotted inner ring.
-struct DotRing: View {
-    let fraction: Double
+struct DotRing: View, Animatable {
+    var fraction: Double
     var ticks = 48
     var tickLength: CGFloat = 6
     var innerDots = true
+
+    var animatableData: Double {
+        get { fraction }
+        set { fraction = newValue }
+    }
 
     var body: some View {
         Canvas { context, size in

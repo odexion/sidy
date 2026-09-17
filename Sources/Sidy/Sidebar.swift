@@ -7,7 +7,10 @@ struct Sidebar: View {
 
     let openSettings: () -> Void
     var pinned: Module?
+    /// Plays the opening animation when the sidebar first appears.
+    var animated = true
     @Environment(Preferences.self) private var prefs
+    @State private var revealed = false
 
     var body: some View {
         Group {
@@ -18,6 +21,11 @@ struct Sidebar: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: prefs.edge == .left ? .leading : .trailing)
+        .environment(\.revealed, revealed || !animated)
+        .onAppear {
+            // A beat after launch, so startup work settles before anything moves.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { revealed = true }
+        }
     }
 
     private var grid: some View {
@@ -32,13 +40,14 @@ struct Sidebar: View {
     private func stack(columns: Int) -> some View {
         let modules = prefs.visible
         return VStack(alignment: .leading, spacing: Self.spacing + 4) {
-            if prefs.showHeader { Header() }
+            if prefs.showHeader { Header().reveal(rank: 0, delay: 0.1, scale: 0.9) }
             HStack(alignment: .top, spacing: Self.spacing) {
                 ForEach(0..<columns, id: \.self) { column in
                     VStack(spacing: Self.spacing) {
                         ForEach(Array(modules.enumerated()), id: \.element) { index, module in
                             if index % columns == column {
                                 ModuleCard(module: module, index: index + 1)
+                                    .reveal(rank: centerRank(index, of: modules.count), scale: 0.92)
                                     .contextMenu {
                                         Button("Hide \(module.title)") { prefs.toggle(module) }
                                         Button("Settings…", action: openSettings)

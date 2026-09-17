@@ -46,8 +46,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.level = ProcessInfo.processInfo.environment["SIDY_FLOATING"] != nil
             ? .floating : NSWindow.Level(Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
-        panel.contentView = NSHostingView(rootView: sidebar)
+        // Size the panel first: a layout at zero size would make the opening animation fly in from a corner.
         placePanel()
+        panel.contentView = NSHostingView(rootView: sidebar())
         panel.orderFrontRegardless()
 
         prefs.onLayoutChange = { [weak self] in self?.placePanel() }
@@ -65,8 +66,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
     }
 
-    private var sidebar: some View {
-        Sidebar(openSettings: { [weak self] in self?.openSettings() }, pinned: snapshotPinned)
+    private func sidebar(animated: Bool = true) -> some View {
+        Sidebar(openSettings: { [weak self] in self?.openSettings() }, pinned: snapshotPinned, animated: animated)
             .environment(prefs)
             .environment(system)
             .environment(usage)
@@ -115,7 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         usage.refresh()
         media.poll()
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [self] in
-            let renderer = ImageRenderer(content: sidebar.frame(width: Sidebar.maxWidth, height: 1000).background(Color(white: 0.05)))
+            let renderer = ImageRenderer(content: sidebar(animated: false).frame(width: Sidebar.maxWidth, height: 1000).background(Color(white: 0.05)))
             renderer.scale = 2
             if let tiff = renderer.nsImage?.tiffRepresentation,
                let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
