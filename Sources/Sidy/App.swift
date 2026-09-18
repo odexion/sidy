@@ -18,9 +18,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let system = SystemMonitor()
     let usage = AIUsage()
     lazy var media = NowPlaying(prefs: prefs)
+    let updater = Updater()
 
     private var panel: NSPanel!
     private var statusItem: NSStatusItem!
+    private let updateItem = NSMenuItem(title: "", action: #selector(installUpdate), keyEquivalent: "")
+    private let updateSeparator = NSMenuItem.separator()
+    private let updateDot = NSView()
     private var settingsWindow: NSWindow?
     private var snapshotPinned: Module?
 
@@ -58,13 +62,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = .menuBarIcon
+        if let button = statusItem.button {
+            // An orange badge on the gauge while an update is waiting.
+            updateDot.wantsLayer = true
+            updateDot.layer?.backgroundColor = NSColor(Theme.accent).cgColor
+            updateDot.layer?.cornerRadius = 3
+            updateDot.frame = NSRect(x: button.bounds.maxX - 9, y: button.isFlipped ? 3 : button.bounds.maxY - 9, width: 6, height: 6)
+            updateDot.autoresizingMask = [.minXMargin, button.isFlipped ? .maxYMargin : .minYMargin]
+            updateDot.isHidden = true
+            button.addSubview(updateDot)
+        }
         let menu = NSMenu()
+        menu.autoenablesItems = false
+        updateItem.target = self
+        menu.addItem(updateItem)
+        menu.addItem(updateSeparator)
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "Refresh AI Usage", action: #selector(refreshUsage), keyEquivalent: "r").target = self
+        menu.addItem(withTitle: "Replay Opening Animation", action: #selector(replayAnimation), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Sidy", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         statusItem.menu = menu
+
+        updater.onChange = { [weak self] in self?.showUpdateState() }
+        showUpdateState()
+        updater.start()
     }
+
+    private func showUpdateState() {
+        switch updater.state {
+        case .idle:
+            updateItem.isHidden = true
+        case .available(let version):
+            updateItem.isHidden = false
+            updateItem.isEnabled = true
+            updateItem.title = "Restart to Update to \(version)"
+        case .installing:
+            updateItem.isHidden = false
+            updateItem.isEnabled = false
+            updateItem.title = "Downloading Update…"
+        }
+        updateSeparator.isHidden = updateItem.isHidden
+        updateDot.isHidden = updateItem.isHidden
+    }
+
+    @objc func installUpdate() { updater.install() }
 
     private func sidebar(animated: Bool = true) -> some View {
         Sidebar(openSettings: { [weak self] in self?.openSettings() }, pinned: snapshotPinned, animated: animated)
@@ -104,6 +146,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func refreshUsage() { usage.refresh() }
+
+    /// A fresh hosting view starts the sidebar over, folded up, so the opening animation plays again.
+    @objc func replayAnimation() { panel.contentView = NSHostingView(rootView: sidebar()) }
 
     private func registerFont() {
         guard let url = Resource.url("Doto", "ttf") else { return }
