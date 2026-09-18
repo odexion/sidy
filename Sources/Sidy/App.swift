@@ -57,7 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "circle.grid.3x3", accessibilityDescription: "Sidy")
+        statusItem.button?.image = .menuBarIcon
         let menu = NSMenu()
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "Refresh AI Usage", action: #selector(refreshUsage), keyEquivalent: "r").target = self
@@ -125,4 +125,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
         }
     }
+}
+
+extension NSImage {
+    /// A small gauge, like the compact tiles: twelve evenly spaced ticks, the unfilled ones dimmed.
+    static let menuBarIcon: NSImage = {
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
+            let center = NSPoint(x: 9, y: 9), ticks = 12, lit = 8
+            for tick in 0..<ticks {
+                let angle = Double(tick) / Double(ticks) * 2 * .pi
+                let direction = NSPoint(x: sin(angle), y: cos(angle))
+                let line = NSBezierPath()
+                line.move(to: NSPoint(x: center.x + direction.x * 5, y: center.y + direction.y * 5))
+                line.line(to: NSPoint(x: center.x + direction.x * 7.5, y: center.y + direction.y * 7.5))
+                line.lineWidth = 2
+                line.lineCapStyle = .round
+                NSColor.black.withAlphaComponent(tick < lit ? 1 : 0.35).setStroke()
+                line.stroke()
+            }
+            NSColor.black.setFill()
+            NSBezierPath(ovalIn: NSRect(x: 7, y: 7, width: 4, height: 4)).fill()
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "Sidy"
+        return image
+    }()
 }
