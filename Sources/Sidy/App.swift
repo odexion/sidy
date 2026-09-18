@@ -20,8 +20,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var media = NowPlaying(prefs: prefs)
     let updater = Updater()
     let clocks = Clocks()
+    let notes = Notes()
 
-    private var panel: NSPanel!
+    private var panel: SidebarPanel!
     private var statusItem: NSStatusItem!
     private let updateItem = NSMenuItem(title: "", action: #selector(installUpdate), keyEquivalent: "")
     private let updateSeparator = NSMenuItem.separator()
@@ -44,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         media.start()
         clocks.start()
 
-        panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel = SidebarPanel()
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
@@ -57,6 +58,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.contentView = NSHostingView(rootView: sidebar())
         panel.orderFrontRegardless()
 
+        // Clicking away from a note ends editing, which lets its card close.
+        NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: panel, queue: .main) { [weak self] _ in
+            self?.notes.editing = false
+        }
         prefs.onLayoutChange = { [weak self] in self?.placePanel() }
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             self?.placePanel()
@@ -119,6 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .environment(usage)
             .environment(media)
             .environment(clocks)
+            .environment(notes)
     }
 
     /// A full-height transparent strip on the chosen edge; empty areas pass clicks through.

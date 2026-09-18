@@ -2,12 +2,12 @@ import Foundation
 import Observation
 
 enum Module: String, CaseIterable, Identifiable {
-    case cpu, gpu, memory, storage, network, claude, codex, battery, media, system, timer, alarm
+    case cpu, gpu, memory, storage, network, claude, codex, battery, media, system, timer, alarm, notes
 
     var id: String { rawValue }
 
     /// Off until turned on in Settings.
-    static let optIn: Set<Module> = [.timer, .alarm]
+    static let optIn: Set<Module> = [.timer, .alarm, .notes]
 
     var title: String {
         switch self {
@@ -23,6 +23,7 @@ enum Module: String, CaseIterable, Identifiable {
         case .system: "System"
         case .timer: "Timer"
         case .alarm: "Alarm"
+        case .notes: "Notes"
         }
     }
 
@@ -40,6 +41,7 @@ enum Module: String, CaseIterable, Identifiable {
         case .system: .symbol("thermometer.medium")
         case .timer: .symbol("timer")
         case .alarm: .symbol("alarm")
+        case .notes: .symbol("scribble.variable")
         }
     }
 }

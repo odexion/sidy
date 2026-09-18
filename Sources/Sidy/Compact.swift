@@ -5,6 +5,7 @@ struct CompactBar: View {
     let openSettings: () -> Void
     @Environment(Preferences.self) private var prefs
     @Environment(Clocks.self) private var clocks
+    @Environment(Notes.self) private var notes
     @Environment(\.revealed) private var revealed
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -76,7 +77,7 @@ struct CompactBar: View {
         .animation(.easeOut(duration: 0.15), value: shown)
     }
 
-    private var shown: Module? { drag == nil ? hovered ?? pinned : nil }
+    private var shown: Module? { drag == nil ? hovered ?? pinned ?? (notes.editing ? .notes : nil) : nil }
 
     /// Opens as a circle at full width that stretches up and down from its middle.
     private var pill: some View {
@@ -185,6 +186,7 @@ private struct ModuleTile: View {
     @Environment(AIUsage.self) private var usage
     @Environment(NowPlaying.self) private var media
     @Environment(Clocks.self) private var clocks
+    @Environment(Notes.self) private var notes
     @Environment(\.revealed) private var revealed
 
     var body: some View {
@@ -269,6 +271,9 @@ private struct ModuleTile: View {
             guard let next = clocks.alarmNext else { return Metric(fraction: 0, value: "OFF") }
             // Fills over the last day before it rings.
             return Metric(fraction: 1 - next.timeIntervalSince(clocks.now) / 86_400, value: clocks.alarmTime)
+        case .notes:
+            // The ring fills toward a short note's worth of words.
+            return Metric(fraction: min(Double(notes.words) / 100, 1), value: "NOTE")
         }
     }
 

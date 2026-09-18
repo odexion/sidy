@@ -19,6 +19,7 @@ struct ModuleCard: View {
         case .system: SystemCard(index: index)
         case .timer: TimerCard(index: index)
         case .alarm: AlarmCard(index: index)
+        case .notes: NotesCard(index: index)
         }
     }
 }
