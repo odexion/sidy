@@ -202,7 +202,7 @@ private struct ModuleTile: View {
             .frame(width: 38, height: 38)
 
             Text(metric.value)
-                .font(Theme.display(11))
+                .font(.system(size: 11, weight: .semibold).monospacedDigit())
                 .foregroundStyle(metric.alert ? Theme.accent : Theme.ink)
                 .lineLimit(1)
                 .fixedSize()

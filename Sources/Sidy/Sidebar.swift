@@ -24,7 +24,7 @@ struct Sidebar: View {
         .environment(\.revealed, revealed || !animated)
         .onAppear {
             // A beat after launch, so startup work settles before anything moves.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { revealed = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { revealed = true }
         }
     }
 
