@@ -7,6 +7,21 @@
 <p align="center">A dot-matrix system sidebar for your macOS desktop.</p>
 
 <p align="center">
+  <a href="https://github.com/odexion/sidy/releases/latest"><img src="https://img.shields.io/github/v/release/odexion/sidy?label=release&color=ff4f29" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-lightgrey?logo=apple" alt="macOS 14 or later">
+  <img src="https://img.shields.io/badge/Apple%20silicon-arm64-lightgrey" alt="Apple silicon">
+</p>
+
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/odexion/sidy/main/scripts/install.sh | sh
+```
+
+> [!TIP]
+> Paste this line into Terminal. It downloads the latest release, installs it into `/Applications` and opens it, without sudo. After that, Sidy updates itself from the menu bar.
+
+<p align="center">
   <img src="docs/screenshot.png" width="280" alt="Sidy compact pill with the Claude card open">
 </p>
 
@@ -26,22 +41,24 @@ Sidy sits on the edge of your desktop as a slim pill of gauges. Hover a tile to 
 | Battery | Charge, power source and time remaining |
 | Now Playing | Spotify, Music, or YouTube Music in any browser, with controls and a seek bar |
 | System | Thermal state, uptime and load average |
+| Timer* | Countdown with presets, pause and +1 minute |
+| Alarm* | Daily alarm with snooze and a countdown to the next ring |
+| Notes* | A scratch note, saved as you type |
+
+\*Off by default. Turn them on in Settings → Modules.
 
 ## Customizing
 
 - **Reorder:** drag tiles up or down the pill.
 - **Hide a section:** right-click its tile.
 - **Settings:** click the `•••` under the pill to show or hide sections, reorder them, pick the screen edge, switch to the detailed card grid, or launch Sidy at login.
+- **Menu bar:** the gauge icon opens Settings, refreshes AI usage, replays the opening animation, checks for updates or quits Sidy.
 
-## Install
+## Install options
 
 Requires an Apple silicon Mac running macOS 14 or later.
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/odexion/sidy/main/scripts/install.sh | sh
-```
-
-This installs the latest release into `/Applications` (or `~/Applications` if `/Applications` isn't writable), then opens it. It doesn't need sudo. Run the same command again to update; a running Sidy is quit and relaunched.
+The installer puts Sidy in `/Applications`, or in `~/Applications` if `/Applications` isn't writable. If Sidy is already running, it's quit, replaced and relaunched.
 
 Options go in environment variables. For example, `SIDY_VERSION=v1.0.0` installs a specific release and `SIDY_NO_LAUNCH=1` skips opening Sidy afterwards. Run the script with `--help` to see them all.
 
@@ -59,6 +76,10 @@ Options go in environment variables. For example, `SIDY_VERSION=v1.0.0` installs
 </details>
 
 Sidy runs from the menu bar and has no Dock icon. It sits at desktop level, so it shows whenever the desktop is visible.
+
+## Updating
+
+Sidy checks for new releases at launch and every 6 hours. When one is out, an orange dot appears on the menu bar icon. Choose **Restart to Update** from its menu, and Sidy downloads the release, replaces itself and relaunches. **Check for Updates…** checks right away. Versions before 1.2.0 can't update themselves, so run the install command again.
 
 ## How it gets its data
 
