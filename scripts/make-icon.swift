@@ -1,24 +1,9 @@
 // Renders Resources/AppIcon.icns: swift scripts/make-icon.swift
 import AppKit
 
-func ring(_ ctx: CGContext, center: CGPoint, radius: CGFloat, fraction: Double, ticks: Int, length: CGFloat, width: CGFloat) {
-    let lit = Int((fraction * Double(ticks)).rounded())
-    ctx.setLineCap(.round)
-    ctx.setLineWidth(width)
-    for tick in 0..<ticks {
-        let angle = Double(tick) / Double(ticks) * 2 * .pi + .pi / 2   // clockwise from the top in flipped-free coordinates
-        let direction = CGPoint(x: -cos(angle), y: sin(angle))
-        let color: NSColor = tick >= lit ? NSColor(white: 0.24, alpha: 1)
-            : tick == lit - 1 ? NSColor(red: 1, green: 0.31, blue: 0.16, alpha: 1) : NSColor(white: 0.93, alpha: 1)
-        ctx.setStrokeColor(color.cgColor)
-        ctx.move(to: CGPoint(x: center.x + direction.x * (radius - length), y: center.y + direction.y * (radius - length)))
-        ctx.addLine(to: CGPoint(x: center.x + direction.x * radius, y: center.y + direction.y * radius))
-        ctx.strokePath()
-    }
-}
-
 func draw(_ ctx: CGContext) {
     let accent = NSColor(red: 1, green: 0.31, blue: 0.16, alpha: 1).cgColor
+    let ink = NSColor(white: 0.92, alpha: 1)
 
     // Squircle body on Apple's 1024 grid.
     let body = CGRect(x: 100, y: 100, width: 824, height: 824)
@@ -35,12 +20,6 @@ func draw(_ ctx: CGContext) {
     ctx.clip()
     let background = CGGradient(colorsSpace: nil, colors: [NSColor(white: 0.17, alpha: 1).cgColor, NSColor(white: 0.05, alpha: 1).cgColor] as CFArray, locations: [0, 1])!
     ctx.drawLinearGradient(background, start: CGPoint(x: 0, y: 924), end: CGPoint(x: 0, y: 100), options: [])
-
-    // Dot grid texture.
-    ctx.setFillColor(NSColor(white: 1, alpha: 0.045).cgColor)
-    for x in stride(from: 124.0, to: 924, by: 28) {
-        for y in stride(from: 124.0, to: 924, by: 28) { ctx.fillEllipse(in: CGRect(x: x - 2.5, y: y - 2.5, width: 5, height: 5)) }
-    }
     ctx.restoreGState()
 
     ctx.addPath(shape)
@@ -48,38 +27,33 @@ func draw(_ ctx: CGContext) {
     ctx.setLineWidth(3)
     ctx.strokePath()
 
-    // The pill.
-    let pill = CGRect(x: 392, y: 190, width: 240, height: 644)
-    let pillPath = CGPath(roundedRect: pill, cornerWidth: 120, cornerHeight: 120, transform: nil)
-    ctx.saveGState()
-    ctx.setShadow(offset: CGSize(width: 0, height: -18), blur: 40, color: NSColor.black.withAlphaComponent(0.7).cgColor)
-    ctx.addPath(pillPath)
-    ctx.setFillColor(NSColor(white: 0.1, alpha: 1).cgColor)
-    ctx.fillPath()
-    ctx.restoreGState()
-    ctx.saveGState()
-    ctx.addPath(pillPath)
-    ctx.clip()
-    let pillGradient = CGGradient(colorsSpace: nil, colors: [NSColor(white: 0.2, alpha: 1).cgColor, NSColor(white: 0.08, alpha: 1).cgColor] as CFArray, locations: [0, 1])!
-    ctx.drawLinearGradient(pillGradient, start: CGPoint(x: 0, y: pill.maxY), end: CGPoint(x: 0, y: pill.minY), options: [])
-    ctx.restoreGState()
-    ctx.addPath(pillPath)
-    ctx.setStrokeColor(NSColor(white: 1, alpha: 0.28).cgColor)
-    ctx.setLineWidth(4)
-    ctx.strokePath()
-
-    // Three gauges, the top one highlighted with an orange core.
-    let centers = [CGPoint(x: 512, y: 712), CGPoint(x: 512, y: 512), CGPoint(x: 512, y: 312)]
-    let fractions = [0.72, 0.45, 0.88]
-    for (i, center) in centers.enumerated() {
-        ring(ctx, center: center, radius: 78, fraction: fractions[i], ticks: 32, length: 22, width: 9)
+    // One dotted disc, like the Now Playing tile: three rings of dots around an orange core.
+    let center = CGPoint(x: 512, y: 580)
+    let radius: CGFloat = 230
+    for (ring, count) in [(1.0, 30), (0.74, 22), (0.5, 14)] {
+        let color = ring == 1.0 ? ink : NSColor(white: 0.5, alpha: 0.6)
+        ctx.setFillColor(color.cgColor)
+        let r = radius * ring
+        for i in 0..<count {
+            let angle = Double(i) / Double(count) * 2 * .pi
+            let dot = CGPoint(x: center.x + cos(angle) * r, y: center.y + sin(angle) * r)
+            ctx.fillEllipse(in: CGRect(x: dot.x - 11, y: dot.y - 11, width: 22, height: 22))
+        }
     }
     ctx.setFillColor(accent)
-    ctx.fillEllipse(in: CGRect(x: 512 - 20, y: 712 - 20, width: 40, height: 40))
-    ctx.setFillColor(NSColor(white: 0.93, alpha: 1).cgColor)
-    for center in centers.dropFirst() {
-        ctx.fillEllipse(in: CGRect(x: center.x - 11, y: center.y - 11, width: 22, height: 22))
-    }
+    ctx.fillEllipse(in: CGRect(x: center.x - 40, y: center.y - 40, width: 80, height: 80))
+
+    // The name underneath, set like a tile's label.
+    let label = NSAttributedString(string: "SIDY", attributes: [
+        .font: NSFont.systemFont(ofSize: 124, weight: .bold),
+        .foregroundColor: ink,
+        .kern: 10,
+    ])
+    let size = label.size()
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+    label.draw(at: CGPoint(x: 512 - (size.width - 10) / 2, y: 190))
+    NSGraphicsContext.restoreGraphicsState()
 }
 
 func png(size: Int) -> Data {
