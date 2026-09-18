@@ -17,6 +17,8 @@ struct ModuleCard: View {
         case .battery: BatteryCard(index: index)
         case .media: MediaCard(index: index)
         case .system: SystemCard(index: index)
+        case .timer: TimerCard(index: index)
+        case .alarm: AlarmCard(index: index)
         }
     }
 }
@@ -296,6 +298,193 @@ private struct SystemCard: View {
                 Stat(label: "Load 1m", value: String(format: "%.2f", system.loadAverage[0]), alignment: .trailing)
             }
         }
+    }
+}
+
+private struct TimerCard: View {
+    let index: Int
+    @Environment(Clocks.self) private var clocks
+
+    var body: some View {
+        let ringing = clocks.ringing == .timer
+        let badge = ringing ? Badge(text: "Done")
+            : clocks.timerRunning ? Badge(text: "Running")
+            : clocks.timerActive ? Badge(text: "Paused", color: Theme.muted) : nil
+        Card(index: index, title: "Timer", badge: badge) {
+            HStack(alignment: .center) {
+                if ringing {
+                    BigValue(value: "DONE", size: 30)
+                } else {
+                    DotClock(text: Format.clock(clocks.timerActive ? clocks.timeLeft.rounded(.up) : clocks.duration))
+                }
+                Spacer(minLength: 4)
+                if !clocks.timerActive && !ringing {
+                    VStack(spacing: 2) {
+                        ClockButton(symbol: "plus") { clocks.addTime(60) }
+                        ClockButton(symbol: "minus") { clocks.duration = max(clocks.duration - 60, 60) }
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+            DotMeter(fraction: ringing ? 1 : clocks.timerActive ? clocks.timeLeft / max(clocks.duration, 1) : 0, alert: ringing)
+                .frame(height: 6)
+            Spacer(minLength: 0)
+            HStack(spacing: 6) {
+                if ringing {
+                    Spacer()
+                    StopButton(action: clocks.resetTimer)
+                } else if clocks.timerActive {
+                    Chip(text: "+1M") { clocks.addTime(60) }
+                    Spacer()
+                    ClockButton(symbol: "arrow.counterclockwise", action: clocks.resetTimer)
+                    PlayButton(playing: clocks.timerRunning) { clocks.timerRunning ? clocks.pauseTimer() : clocks.startTimer() }
+                } else {
+                    ForEach(Clocks.presets, id: \.self) { preset in
+                        Chip(text: "\(Int(preset / 60))M", selected: clocks.duration == preset) { clocks.duration = preset }
+                    }
+                    Spacer(minLength: 0)
+                    PlayButton(playing: false, action: clocks.startTimer)
+                }
+            }
+        }
+    }
+}
+
+private struct AlarmCard: View {
+    let index: Int
+    @Environment(Clocks.self) private var clocks
+
+    var body: some View {
+        @Bindable var clocks = clocks
+        let ringing = clocks.ringing == .alarm
+        let badge = ringing ? Badge(text: "Ringing") : clocks.alarmOn ? Badge(text: "Daily") : Badge(text: "Off", color: Theme.muted)
+        Card(index: index, title: "Alarm", badge: badge) {
+            HStack(alignment: .center, spacing: 8) {
+                stepper(hours: 1)
+                DotClock(text: clocks.alarmTime)
+                    .opacity(clocks.alarmOn || ringing ? 1 : 0.4)
+                stepper(minutes: 5)
+                Spacer(minLength: 0)
+            }
+            Spacer(minLength: 0)
+            HStack(alignment: .center) {
+                if ringing {
+                    Chip(text: "Snooze 5M", action: clocks.snooze)
+                    Spacer()
+                    StopButton(action: clocks.stop)
+                } else {
+                    Stat(label: "Rings in", value: clocks.alarmNext.map { Format.duration($0.timeIntervalSince(clocks.now) + 59) } ?? "—")
+                    Spacer()
+                    Toggle("", isOn: $clocks.alarmOn).toggleStyle(DotToggleStyle())
+                }
+            }
+        }
+    }
+
+    /// Up and down arrows beside the time; hours on the left, minutes (in fives) on the right.
+    private func stepper(hours: Int = 0, minutes: Int = 0) -> some View {
+        VStack(spacing: 2) {
+            ClockButton(symbol: "chevron.up") { clocks.stepAlarm(hours: hours, minutes: minutes) }
+            ClockButton(symbol: "chevron.down") { clocks.stepAlarm(hours: -hours, minutes: -minutes) }
+        }
+    }
+}
+
+/// A time in the display font. Doto's own colon is cluttered, so it is drawn as two plain dots.
+private struct DotClock: View {
+    let text: String
+    var size: CGFloat = 30
+
+    var body: some View {
+        let parts = text.split(separator: ":", omittingEmptySubsequences: false)
+        HStack(spacing: size * 0.08) {
+            ForEach(Array(parts.enumerated()), id: \.offset) { index, part in
+                if index > 0 {
+                    VStack(spacing: size * 0.2) {
+                        ForEach(0..<2, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: 1).fill(Theme.ink).frame(width: size * 0.1, height: size * 0.1)
+                        }
+                    }
+                }
+                Text(part).font(Theme.display(size)).foregroundStyle(Theme.ink)
+            }
+        }
+        .lineLimit(1)
+        .fixedSize()
+    }
+}
+
+private struct ClockButton: View {
+    let symbol: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(hovering ? Theme.accent : Theme.ink)
+                .frame(width: 20, height: 16)
+                .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.white.opacity(hovering ? 0.1 : 0.05)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+    }
+}
+
+private struct Chip: View {
+    let text: String
+    var selected = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(text.uppercased())
+                .font(Theme.label)
+                .foregroundStyle(selected ? Theme.accent : Theme.ink)
+                .padding(.horizontal, 5)
+                .frame(height: 18)
+                .background(Capsule().fill(.white.opacity(selected ? 0.1 : 0.05)))
+                .overlay(Capsule().strokeBorder(Theme.accent.opacity(selected ? 0.7 : 0), lineWidth: 0.8))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+    }
+}
+
+private struct PlayButton: View {
+    let playing: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: playing ? "pause.fill" : "play.fill")
+                .font(.system(size: 9))
+                .foregroundStyle(Theme.accent)
+                .frame(width: 26, height: 26)
+                .overlay(Circle().strokeBorder(Theme.accent, lineWidth: 1.2))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct StopButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text("STOP")
+                .font(Theme.label.weight(.bold))
+                .foregroundStyle(.black)
+                .padding(.horizontal, 14)
+                .frame(height: 24)
+                .background(Capsule().fill(Theme.accent))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 

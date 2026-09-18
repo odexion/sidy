@@ -2,9 +2,12 @@ import Foundation
 import Observation
 
 enum Module: String, CaseIterable, Identifiable {
-    case cpu, gpu, memory, storage, network, claude, codex, battery, media, system
+    case cpu, gpu, memory, storage, network, claude, codex, battery, media, system, timer, alarm
 
     var id: String { rawValue }
+
+    /// Off until turned on in Settings.
+    static let optIn: Set<Module> = [.timer, .alarm]
 
     var title: String {
         switch self {
@@ -18,6 +21,8 @@ enum Module: String, CaseIterable, Identifiable {
         case .battery: "Battery"
         case .media: "Now Playing"
         case .system: "System"
+        case .timer: "Timer"
+        case .alarm: "Alarm"
         }
     }
 
@@ -33,6 +38,8 @@ enum Module: String, CaseIterable, Identifiable {
         case .battery: .symbol("battery.75percent")
         case .media: .symbol("music.note")
         case .system: .symbol("thermometer.medium")
+        case .timer: .symbol("timer")
+        case .alarm: .symbol("alarm")
         }
     }
 }
@@ -62,11 +69,15 @@ final class Preferences {
 
     init() {
         let saved = (defaults.stringArray(forKey: "order") ?? []).compactMap(Module.init)
-        order = saved + Module.allCases.filter { !saved.contains($0) }
-        hidden = Set((defaults.stringArray(forKey: "hidden") ?? []).compactMap(Module.init))
+        let added = Module.allCases.filter { !saved.contains($0) }
+        order = saved + added
+        // Modules new to this Mac start hidden if they are opt-in. Saving both lists now marks them as seen.
+        hidden = Set((defaults.stringArray(forKey: "hidden") ?? []).compactMap(Module.init)).union(added.filter(Module.optIn.contains))
         edge = SidebarEdge(rawValue: defaults.string(forKey: "edge") ?? "") ?? .right
         showHeader = defaults.object(forKey: "showHeader") as? Bool ?? true
         detailed = defaults.bool(forKey: "detailed")
+        defaults.set(order.map(\.rawValue), forKey: "order")
+        defaults.set(hidden.map(\.rawValue), forKey: "hidden")
     }
 
     func toggle(_ module: Module) {

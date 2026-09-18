@@ -124,7 +124,7 @@ private extension View {
 }
 
 /// A slim capsule switch with a dot knob; orange when on.
-private struct DotToggleStyle: ToggleStyle {
+struct DotToggleStyle: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         Capsule()
             .fill(configuration.isOn ? Theme.accent : Color(white: 0.2))

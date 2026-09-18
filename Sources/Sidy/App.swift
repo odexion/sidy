@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let usage = AIUsage()
     lazy var media = NowPlaying(prefs: prefs)
     let updater = Updater()
+    let clocks = Clocks()
 
     private var panel: NSPanel!
     private var statusItem: NSStatusItem!
@@ -41,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         system.start()
         usage.start()
         media.start()
+        clocks.start()
 
         panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.isOpaque = false
@@ -114,6 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .environment(system)
             .environment(usage)
             .environment(media)
+            .environment(clocks)
     }
 
     /// A full-height transparent strip on the chosen edge; empty areas pass clicks through.

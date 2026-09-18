@@ -4,6 +4,7 @@ import SwiftUI
 struct CompactBar: View {
     let openSettings: () -> Void
     @Environment(Preferences.self) private var prefs
+    @Environment(Clocks.self) private var clocks
     @Environment(\.revealed) private var revealed
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -36,6 +37,8 @@ struct CompactBar: View {
                         .zIndex(isDragged ? 1 : 0)
                         .onHover { $0 ? show(module) : scheduleHide() }
                         .onTapGesture {
+                            // A ringing timer or alarm is silenced by clicking its tile.
+                            if clocks.isRinging(module) { return clocks.stop() }
                             withAnimation(.easeOut(duration: 0.15)) { pinned = pinned == module ? nil : module }
                         }
                         .gesture(
@@ -181,6 +184,7 @@ private struct ModuleTile: View {
     @Environment(SystemMonitor.self) private var system
     @Environment(AIUsage.self) private var usage
     @Environment(NowPlaying.self) private var media
+    @Environment(Clocks.self) private var clocks
     @Environment(\.revealed) private var revealed
 
     var body: some View {
@@ -256,6 +260,15 @@ private struct ModuleTile: View {
         case .system:
             let level = system.thermal.rawValue
             return Metric(fraction: Double(level + 1) / 4, value: String(system.thermal.name.prefix(4)), alert: level >= 2)
+        case .timer:
+            if clocks.ringing == .timer { return Metric(fraction: 1, value: "DONE", alert: true) }
+            let left = clocks.timeLeft
+            return Metric(fraction: clocks.timerActive ? left / max(clocks.duration, 1) : 0, value: Format.clock(left.rounded(.up)))
+        case .alarm:
+            if clocks.ringing == .alarm { return Metric(fraction: 1, value: "RING", alert: true) }
+            guard let next = clocks.alarmNext else { return Metric(fraction: 0, value: "OFF") }
+            // Fills over the last day before it rings.
+            return Metric(fraction: 1 - next.timeIntervalSince(clocks.now) / 86_400, value: clocks.alarmTime)
         }
     }
 
