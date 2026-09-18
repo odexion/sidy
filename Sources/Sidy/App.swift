@@ -82,6 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "Refresh AI Usage", action: #selector(refreshUsage), keyEquivalent: "r").target = self
         menu.addItem(withTitle: "Replay Opening Animation", action: #selector(replayAnimation), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Sidy", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         statusItem.menu = menu
@@ -109,6 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func installUpdate() { updater.install() }
+    @objc func checkForUpdates() { updater.check(manual: true) }
 
     private func sidebar(animated: Bool = true) -> some View {
         Sidebar(openSettings: { [weak self] in self?.openSettings() }, pinned: snapshotPinned, animated: animated)

@@ -26,17 +26,38 @@ final class Updater {
         timer = Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { [weak self] _ in self?.check() }
     }
 
-    func check() {
+    /// `manual` checks come from the menu and always report back, even when there is nothing new.
+    func check(manual: Bool = false) {
         Task { @MainActor in
-            guard state != .installing, let release = await Self.fetchLatest() else { return }
+            guard state != .installing else { return }
+            guard let release = await Self.fetchLatest() else {
+                if manual { alert("Couldn't check for updates", "GitHub could not be reached. Try again in a moment.") }
+                return
+            }
             let version = release.tag.hasPrefix("v") ? String(release.tag.dropFirst()) : release.tag
-            if Self.isNewer(version, than: current) {
-                assetURL = release.asset
-                state = .available(version: version)
-            } else {
+            guard Self.isNewer(version, than: current) else {
                 state = .idle
+                if manual { alert("Sidy is up to date", "You have the latest version, \(current).") }
+                return
+            }
+            assetURL = release.asset
+            state = .available(version: version)
+            if manual, alert("Sidy \(version) is available", "You have \(current). Sidy will restart to finish updating.",
+                             buttons: ["Restart to Update", "Later"]) {
+                install()
             }
         }
+    }
+
+    /// Shows a dialog and returns whether the first button was chosen.
+    @discardableResult
+    private func alert(_ title: String, _ message: String, buttons: [String] = []) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        buttons.forEach { alert.addButton(withTitle: $0) }
+        NSApp.activate(ignoringOtherApps: true)
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     /// Downloads the release, then quits; a detached script swaps the bundle once Sidy has exited and relaunches it.
@@ -62,11 +83,7 @@ final class Updater {
                 NSApp.terminate(nil)
             } catch {
                 state = previous
-                let alert = NSAlert()
-                alert.messageText = "Couldn't update Sidy"
-                alert.informativeText = error.localizedDescription
-                NSApp.activate(ignoringOtherApps: true)
-                alert.runModal()
+                alert("Couldn't update Sidy", error.localizedDescription)
             }
         }
     }
