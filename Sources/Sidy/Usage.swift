@@ -22,6 +22,7 @@ final class AIUsage {
 
     private var timer: Timer?
     @ObservationIgnored private var refreshed = Date.distantPast
+    @ObservationIgnored private var retrying = false
 
     func start() {
         refresh()
@@ -33,12 +34,23 @@ final class AIUsage {
         if Date().timeIntervalSince(refreshed) > age { refresh() }
     }
 
+    /// The usage endpoints limit how often they can be asked; one refresh a minute later, once things cool down.
+    private func retrySoon() {
+        guard !retrying else { return }
+        retrying = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in
+            self?.retrying = false
+            self?.refresh()
+        }
+    }
+
     func refresh() {
         refreshed = Date()
         update(claude, with: Self.fetchClaude)
         update(codex, with: Self.fetchCodex)
     }
 
+    /// A failure keeps the last numbers on screen, marked stale, rather than clearing them.
     private func update(_ state: LimitState, with fetch: @escaping () async -> Result<Snapshot, Failure>) {
         Task.detached {
             let result = await fetch()
@@ -50,6 +62,7 @@ final class AIUsage {
                     state.error = nil
                 case .failure(let failure):
                     state.error = failure.message
+                    if failure.rateLimited { self.retrySoon() }
                 }
             }
         }
@@ -60,7 +73,10 @@ final class AIUsage {
         var plan: String?
     }
 
-    private struct Failure: Error { let message: String }
+    private struct Failure: Error {
+        let message: String
+        var rateLimited = false
+    }
 
     // MARK: Claude
 
@@ -77,6 +93,7 @@ final class AIUsage {
             }
             return Snapshot(windows: windows)
         }
+        .flatMap { $0.windows.isEmpty ? .failure(Failure(message: "Unexpected response")) : .success($0) }
     }
 
     private static func claudeToken() -> String? {
@@ -121,6 +138,7 @@ final class AIUsage {
             }
             return Snapshot(windows: windows, plan: json["plan_type"] as? String)
         }
+        .flatMap { $0.windows.isEmpty ? .failure(Failure(message: "Unexpected response")) : .success($0) }
     }
 
     private static func windowLabel(_ seconds: Double) -> String {
@@ -138,8 +156,15 @@ final class AIUsage {
         guard let (data, response) = try? await URLSession.shared.data(for: request) else {
             return .failure(Failure(message: "Offline"))
         }
-        if (response as? HTTPURLResponse)?.statusCode == 401 {
+        switch (response as? HTTPURLResponse)?.statusCode ?? 200 {
+        case 401:
             return .failure(Failure(message: "Token expired · open \(app)"))
+        case 429:
+            return .failure(Failure(message: "Rate limited · retrying soon", rateLimited: true))
+        case 200..<300:
+            break
+        case let code:
+            return .failure(Failure(message: "\(app) usage unavailable (\(code))"))
         }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return .failure(Failure(message: "Unexpected response"))
