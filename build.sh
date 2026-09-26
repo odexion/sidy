@@ -52,12 +52,15 @@ for arg in "$@"; do
         echo "Packaged $ZIP"
         ;;
     --install)
+        # Same place as scripts/install.sh, so this replaces the copy macOS actually launches.
+        DEST=/Applications
+        [ -w "$DEST" ] || DEST=~/Applications
         pkill -x Sidy || true
-        mkdir -p ~/Applications
-        rm -rf ~/Applications/Sidy.app
-        cp -R "$APP" ~/Applications/
-        open ~/Applications/Sidy.app
-        echo "Installed to ~/Applications/Sidy.app"
+        mkdir -p "$DEST"
+        rm -rf "$DEST/Sidy.app"
+        cp -R "$APP" "$DEST/"
+        open "$DEST/Sidy.app"
+        echo "Installed to $DEST/Sidy.app"
         ;;
     esac
 done

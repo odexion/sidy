@@ -5,21 +5,47 @@ struct SettingsView: View {
     static let width: CGFloat = 340
     private static let rowHeight: CGFloat = 34
 
+    private enum Page { case general, notch }
+
     @Environment(Preferences.self) private var prefs
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var page = Page.general
+    @State private var hookError: String?
+    /// The Notch page has more rows; slightly shorter ones keep it on a 13-inch screen.
+    private static let notchRowHeight: CGFloat = 30
 
     var body: some View {
-        @Bindable var prefs = prefs
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("SIDY").font(Theme.display(30)).kerning(3).foregroundStyle(Theme.ink)
-                HStack(spacing: 6) {
-                    Circle().fill(Theme.accent).frame(width: 5, height: 5)
-                    Text("Settings").font(Theme.label).foregroundStyle(Theme.muted)
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("SIDY").font(Theme.display(30)).kerning(3).foregroundStyle(Theme.ink)
+                    HStack(spacing: 6) {
+                        Circle().fill(Theme.accent).frame(width: 5, height: 5)
+                        Text("Settings").font(Theme.label).foregroundStyle(Theme.muted)
+                    }
                 }
+                Spacer()
+                SegmentedPicker(selection: $page, options: [(.general, "General"), (.notch, "Notch")])
             }
             .padding(.bottom, 22)
 
+            switch page {
+            case .general: general
+            case .notch: notch
+            }
+        }
+        .toggleStyle(DotToggleStyle())
+        .padding(.horizontal, 22)
+        .padding(.top, 36)
+        .padding(.bottom, 22)
+        .frame(width: Self.width)
+        .background(Color(white: 0.055))
+        .preferredColorScheme(.dark)
+    }
+
+    private var general: some View {
+        @Bindable var prefs = prefs
+        return VStack(alignment: .leading, spacing: 0) {
             sectionLabel("01", "Modules", trailing: "\(prefs.visible.count)/\(prefs.order.count) on · drag to reorder")
             List {
                 ForEach(prefs.order) { module in
@@ -56,13 +82,67 @@ struct SettingsView: View {
             .padding(.vertical, 6)
             .panel()
         }
-        .toggleStyle(DotToggleStyle())
-        .padding(.horizontal, 22)
-        .padding(.top, 36)
-        .padding(.bottom, 22)
-        .frame(width: Self.width)
-        .background(Color(white: 0.055))
-        .preferredColorScheme(.dark)
+    }
+
+    private var notch: some View {
+        @Bindable var prefs = prefs
+        return VStack(alignment: .leading, spacing: 0) {
+            sectionLabel("01", "Notch", trailing: "hover a setting for details")
+            VStack(spacing: 0) {
+                settingRow("Show notch", height: Self.notchRowHeight) { Toggle("", isOn: $prefs.notch) }
+                    .help("Music, timers and alerts in a panel that grows out of the camera notch")
+                settingRow("Display", enabled: prefs.notch, height: Self.notchRowHeight) {
+                    SegmentedPicker(selection: $prefs.notchDisplay,
+                                    options: [(.notched, "Built-in"), (.main, "Main"), (.all, "All")])
+                }
+                .help("Built-in: the display with the notch, or the main one when the lid is closed")
+                ForEach(NotchFeature.behavior, id: \.self, content: featureRow)
+            }
+            .padding(.vertical, 6)
+            .panel()
+            .padding(.bottom, 22)
+
+            sectionLabel("02", "Gestures", trailing: "two fingers on the notch")
+            VStack(spacing: 0) {
+                ForEach(NotchFeature.gestures, id: \.self, content: featureRow)
+            }
+            .padding(.vertical, 6)
+            .panel()
+            .padding(.bottom, 22)
+
+            sectionLabel("03", "Live activities")
+            VStack(spacing: 0) {
+                ForEach(NotchFeature.activities, id: \.self, content: featureRow)
+            }
+            .padding(.vertical, 6)
+            .panel()
+            .padding(.bottom, 22)
+
+            sectionLabel("04", "AI agents", trailing: "chats in your terminal")
+            VStack(spacing: 0) {
+                ForEach(NotchFeature.agents, id: \.self, content: featureRow)
+            }
+            .padding(.vertical, 6)
+            .panel()
+            if let hookError {
+                Text(hookError).font(Theme.label).foregroundStyle(Theme.accent).padding(.horizontal, 4).padding(.top, 8)
+            }
+        }
+    }
+
+    private func featureRow(_ feature: NotchFeature) -> some View {
+        settingRow(feature.title, enabled: prefs.notch, height: Self.notchRowHeight) {
+            Toggle("", isOn: Binding(get: { prefs.notchFeatures.contains(feature) }, set: { _ in toggle(feature) }))
+        }
+        .help(feature.detail)
+    }
+
+    /// Agent switches also add or remove Sidy's hooks; if that fails the switch goes back and says why.
+    private func toggle(_ feature: NotchFeature) {
+        prefs.toggle(feature)
+        guard let agent = Agent.allCases.first(where: { $0.feature == feature }) else { return }
+        hookError = AgentHooks.set(agent, enabled: prefs.notchFeatures.contains(feature))
+        if hookError != nil { prefs.toggle(feature) }
     }
 
     private func sectionLabel(_ number: String, _ title: String, trailing: String? = nil) -> some View {
@@ -96,13 +176,14 @@ struct SettingsView: View {
         .contentShape(Rectangle())
     }
 
-    private func settingRow(_ title: String, enabled: Bool = true, @ViewBuilder control: () -> some View) -> some View {
+    private func settingRow(_ title: String, enabled: Bool = true, height: CGFloat = rowHeight,
+                            @ViewBuilder control: () -> some View) -> some View {
         HStack {
             Text(title).font(Theme.body).foregroundStyle(Theme.ink)
             Spacer()
             control()
         }
-        .frame(height: Self.rowHeight)
+        .frame(height: height)
         .padding(.horizontal, 12)
         .opacity(enabled ? 1 : 0.4)
         .disabled(!enabled)

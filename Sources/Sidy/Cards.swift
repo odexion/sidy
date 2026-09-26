@@ -142,15 +142,21 @@ private struct LimitCard: View {
                 Text(state.error ?? "Loading…").font(Theme.body).foregroundStyle(Theme.muted)
             } else {
                 VStack(spacing: 12) {
-                    ForEach(state.windows.prefix(2), id: \.label) { row($0) }
+                    ForEach(state.windows.prefix(2), id: \.label) { LimitRow(window: $0) }
                 }
             }
         }
     }
+}
 
-    private func row(_ window: LimitWindow) -> some View {
+/// "5H LEFT  ↺ 2h 10m  64%" over a dotted meter. Shared by the limit cards and the notch.
+struct LimitRow: View {
+    let window: LimitWindow
+    var valueSize: CGFloat = 19
+
+    var body: some View {
         let left = 1 - window.used
-        return VStack(spacing: 5) {
+        VStack(spacing: 5) {
             HStack(alignment: .lastTextBaseline, spacing: 6) {
                 Text("\(window.label) left".uppercased()).font(Theme.label).foregroundStyle(Theme.muted).fixedSize()
                 Spacer(minLength: 0)
@@ -159,7 +165,7 @@ private struct LimitCard: View {
                         .font(Theme.label).foregroundStyle(Theme.muted).fixedSize()
                 }
                 Text(Format.percent(left) + "%")
-                    .font(Theme.display(19))
+                    .font(Theme.display(valueSize))
                     .foregroundStyle(left < 0.2 ? Theme.accent : Theme.ink)
                     .fixedSize()
             }
@@ -206,7 +212,7 @@ private struct MediaCard: View {
         let badge = media.source.map { Badge(text: $0, color: media.isPlaying ? Theme.accent : Theme.muted) }
         Card(index: index, title: "Now Playing", badge: badge) {
             HStack(spacing: 10) {
-                DotDisc(active: media.isPlaying).frame(width: 34, height: 34)
+                NowPlayingArt(grid: 17).frame(width: 34, height: 34)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(media.title ?? "Nothing playing").font(Theme.body).foregroundStyle(Theme.ink)
                     Text(media.artist ?? "Spotify · YT Music").font(Theme.label).foregroundStyle(Theme.muted)
@@ -215,35 +221,43 @@ private struct MediaCard: View {
             }
             Spacer(minLength: 0)
             SeekBar()
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                HStack(spacing: 0) {
-                    Text(media.duration == nil ? "" : Format.clock(media.position(at: context.date)))
-                        .frame(width: 30, alignment: .leading)
-                    Spacer(minLength: 0)
-                    HStack(spacing: 12) {
-                        control("backward.end.fill", size: 9, action: media.previous)
-                        Button(action: media.playPause) {
-                            Image(systemName: media.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 9))
-                                .foregroundStyle(Theme.accent)
-                                .frame(width: 26, height: 26)
-                                .overlay(Circle().strokeBorder(Theme.accent, lineWidth: 1.2))
-                                .contentShape(Circle())
-                        }
-                        .buttonStyle(.plain)
-                        control("forward.end.fill", size: 9, action: media.next)
-                    }
-                    Spacer(minLength: 0)
-                    Text(media.duration.map(Format.clock) ?? "")
-                        .frame(width: 30, alignment: .trailing)
-                }
-                .font(Theme.label)
-                .foregroundStyle(Theme.muted)
-            }
-            .padding(.top, 6)
-            .disabled(media.source == nil)
-            .opacity(media.source == nil ? 0.35 : 1)
+            MediaControls().padding(.top, 6)
         }
+    }
+}
+
+/// Elapsed time, previous / play-pause / next, and the track length. Shared by the card and the notch.
+struct MediaControls: View {
+    @Environment(NowPlaying.self) private var media
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            HStack(spacing: 0) {
+                Text(media.duration == nil ? "" : Format.clock(media.position(at: context.date)))
+                    .frame(width: 30, alignment: .leading)
+                Spacer(minLength: 0)
+                HStack(spacing: 12) {
+                    control("backward.end.fill", size: 9, action: media.previous)
+                    Button(action: media.playPause) {
+                        Image(systemName: media.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 9))
+                            .foregroundStyle(Theme.accent)
+                            .frame(width: 26, height: 26)
+                            .overlay(Circle().strokeBorder(Theme.accent, lineWidth: 1.2))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    control("forward.end.fill", size: 9, action: media.next)
+                }
+                Spacer(minLength: 0)
+                Text(media.duration.map(Format.clock) ?? "")
+                    .frame(width: 30, alignment: .trailing)
+            }
+            .font(Theme.label)
+            .foregroundStyle(Theme.muted)
+        }
+        .disabled(media.source == nil)
+        .opacity(media.source == nil ? 0.35 : 1)
     }
 
     private func control(_ symbol: String, size: CGFloat, action: @escaping () -> Void) -> some View {
@@ -255,7 +269,7 @@ private struct MediaCard: View {
 }
 
 /// Dotted progress bar; click or drag anywhere on it to seek.
-private struct SeekBar: View {
+struct SeekBar: View {
     @Environment(NowPlaying.self) private var media
     @State private var scrub: Double?
 
@@ -307,11 +321,38 @@ private struct TimerCard: View {
     @Environment(Clocks.self) private var clocks
 
     var body: some View {
+        Card(index: index, title: "Timer", badge: clocks.timerBadge) { TimerControls() }
+    }
+}
+
+private struct AlarmCard: View {
+    let index: Int
+    @Environment(Clocks.self) private var clocks
+
+    var body: some View {
+        Card(index: index, title: "Alarm", badge: clocks.alarmBadge) { AlarmControls() }
+    }
+}
+
+extension Clocks {
+    var timerBadge: Badge? {
+        ringing == .timer ? Badge(text: "Done")
+            : timerRunning ? Badge(text: "Running")
+            : timerActive ? Badge(text: "Paused", color: Theme.muted) : nil
+    }
+
+    var alarmBadge: Badge {
+        ringing == .alarm ? Badge(text: "Ringing") : alarmOn ? Badge(text: "Daily") : Badge(text: "Off", color: Theme.muted)
+    }
+}
+
+/// The countdown, its meter and presets or controls. Shared by the Timer card and the notch.
+struct TimerControls: View {
+    @Environment(Clocks.self) private var clocks
+
+    var body: some View {
         let ringing = clocks.ringing == .timer
-        let badge = ringing ? Badge(text: "Done")
-            : clocks.timerRunning ? Badge(text: "Running")
-            : clocks.timerActive ? Badge(text: "Paused", color: Theme.muted) : nil
-        Card(index: index, title: "Timer", badge: badge) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center) {
                 if ringing {
                     BigValue(value: "DONE", size: 30)
@@ -351,15 +392,14 @@ private struct TimerCard: View {
     }
 }
 
-private struct AlarmCard: View {
-    let index: Int
+/// The alarm time with its steppers, and snooze or the countdown to the next ring. Shared by the Alarm card and the notch.
+struct AlarmControls: View {
     @Environment(Clocks.self) private var clocks
 
     var body: some View {
         @Bindable var clocks = clocks
         let ringing = clocks.ringing == .alarm
-        let badge = ringing ? Badge(text: "Ringing") : clocks.alarmOn ? Badge(text: "Daily") : Badge(text: "Off", color: Theme.muted)
-        Card(index: index, title: "Alarm", badge: badge) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 8) {
                 stepper(hours: 1)
                 DotClock(text: clocks.alarmTime)
@@ -434,7 +474,7 @@ private struct ClockButton: View {
     }
 }
 
-private struct Chip: View {
+struct Chip: View {
     let text: String
     var selected = false
     let action: () -> Void
@@ -472,7 +512,7 @@ private struct PlayButton: View {
     }
 }
 
-private struct StopButton: View {
+struct StopButton: View {
     let action: () -> Void
 
     var body: some View {

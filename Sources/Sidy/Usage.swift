@@ -21,13 +21,20 @@ final class AIUsage {
     let codex = LimitState()
 
     private var timer: Timer?
+    @ObservationIgnored private var refreshed = Date.distantPast
 
     func start() {
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in self?.refresh() }
     }
 
+    /// Refreshes unless the last refresh is recent, e.g. when the notch's usage tab opens.
+    func refreshIfStale(_ age: TimeInterval = 60) {
+        if Date().timeIntervalSince(refreshed) > age { refresh() }
+    }
+
     func refresh() {
+        refreshed = Date()
         update(claude, with: Self.fetchClaude)
         update(codex, with: Self.fetchCodex)
     }

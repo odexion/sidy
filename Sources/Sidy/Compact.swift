@@ -174,13 +174,14 @@ private struct TileBounds: PreferenceKey {
     }
 }
 
-/// A dotted progress ring around the module's icon, with a short value underneath.
-private struct ModuleTile: View {
+/// A dotted progress ring around the module's icon, with a short value underneath. Also used by the notch's modules tab.
+struct ModuleTile: View {
     static let height: CGFloat = 64
 
     let module: Module
-    let highlighted: Bool
-    let pinned: Bool
+    var highlighted = false
+    var pinned = false
+    var width: CGFloat = 46
 
     @Environment(SystemMonitor.self) private var system
     @Environment(AIUsage.self) private var usage
@@ -213,7 +214,7 @@ private struct ModuleTile: View {
                 .lineLimit(1)
                 .fixedSize()
         }
-        .frame(width: 46, height: Self.height)
+        .frame(width: width, height: Self.height)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(.white.opacity(highlighted ? 0.07 : 0))

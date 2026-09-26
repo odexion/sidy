@@ -47,6 +47,23 @@ Sidy sits on the edge of your desktop as a slim pill of gauges. Hover a tile to 
 
 \*Off by default. Turn them on in Settings → Modules.
 
+## Notch player
+
+Turn it on in **Settings → Notch**. Music lives in the notch: while a track is loaded, the notch widens to show the album art in dots and a small equalizer. New tracks peek out underneath for a moment. Hover the notch to drop it open with the seek bar and controls. Its tabs hold the timer and alarm controls, and your AI agent sessions.
+
+It also shows:
+
+- A running timer counting down beside the notch. A ringing timer or alarm drops down with Stop.
+- Short alerts for plugging in, unplugging and low battery, for a Claude or Codex limit dropping under 20% and 10%, and for the Mac running hot.
+
+**AI agents:** turn on **Claude Code** or **Codex** under Settings → Notch → AI agents, and the notch tells you when a reply in your terminal finishes or the agent needs your permission. It shows the project and the start of the reply; click it to bring the terminal forward. The AI tab lists recent sessions, and your Claude and Codex limits when none are running. Turning a switch on adds Sidy's hooks to `~/.claude/settings.json` or `~/.codex/hooks.json`, next to any you already have. Turning it off removes them again, and the file's original is kept once as `.sidy-backup`.
+
+Gestures work with two fingers on the notch. Swipe sideways to change tracks, swipe down to open and up to close. Scroll-for-volume changes the volume on the open notch.
+
+Every part can be switched off in Settings → Notch, and hovering a setting explains it. Scroll-for-volume starts off. By default the notch sits on the built-in display, or the main one when the lid is closed, and hides while an app is full screen. On displays without a notch, it hangs from the middle of the menu bar.
+
+When a player doesn't share its artwork (browsers often drop it), Sidy looks the track up in the iTunes catalog, sending the title and artist to Apple.
+
 ## Customizing
 
 - **Reorder:** drag tiles up or down the pill.

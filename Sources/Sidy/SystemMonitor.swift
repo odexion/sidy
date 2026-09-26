@@ -43,6 +43,18 @@ final class SystemMonitor {
     func start() {
         sample()
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in self?.sample() }
+        watchPower()
+    }
+
+    /// Plugging in or unplugging updates the battery right away instead of at the next slow sample.
+    private func watchPower() {
+        let context = Unmanaged.passUnretained(self).toOpaque()
+        guard let source = IOPSNotificationCreateRunLoopSource({ context in
+            guard let context else { return }
+            let monitor = Unmanaged<SystemMonitor>.fromOpaque(context).takeUnretainedValue()
+            monitor.battery = monitor.sampleBattery()
+        }, context)?.takeRetainedValue() else { return }
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
     }
 
     private func sample() {

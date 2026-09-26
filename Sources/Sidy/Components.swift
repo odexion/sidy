@@ -40,6 +40,11 @@ enum Theme {
     static let ink = Color(white: 0.92)
     static let muted = Color(white: 0.5)
     static let dim = Color(white: 0.2)
+    // Agent session states: orange (the accent) running, yellow needs you, emerald done, pink-red stopped.
+    // Yellow and pink-red sit far enough either side of the orange to tell apart at a glance.
+    static let attention = Color(red: 1.0, green: 0.85, blue: 0.22)
+    static let done = Color(red: 0.16, green: 0.68, blue: 0.42)
+    static let failed = Color(red: 1.0, green: 0.3, blue: 0.52)
 
     static func display(_ size: CGFloat) -> Font { .custom("Doto", size: size).weight(.black) }
     static let label = Font.system(size: 8.5, weight: .medium, design: .monospaced)
@@ -261,6 +266,92 @@ struct DotDisc: View {
                 }
             }
             context.fill(dot(center, 3), with: .color(active ? Theme.accent : Theme.muted))
+        }
+    }
+}
+
+/// Album art as a grid of colored dots; brighter pixels get slightly larger dots.
+struct DotArtwork: View {
+    let art: DotArt
+    var grid = 24
+
+    var body: some View {
+        Canvas { context, size in
+            let pitch = min(size.width, size.height) / CGFloat(grid)
+            for (index, color) in art.colors(grid).enumerated() {
+                let center = CGPoint(x: (CGFloat(index % grid) + 0.5) * pitch, y: (CGFloat(index / grid) + 0.5) * pitch)
+                let luma = 0.3 * color.x + 0.59 * color.y + 0.11 * color.z
+                context.fill(dot(center, pitch * (0.26 + 0.16 * luma)), with: .color(Color(red: color.x, green: color.y, blue: color.z)))
+            }
+        }
+    }
+}
+
+/// The current track's dotted artwork, or the dotted record when there is none.
+struct NowPlayingArt: View {
+    var grid = 24
+    @Environment(NowPlaying.self) private var media
+
+    var body: some View {
+        if let art = media.artwork {
+            DotArtwork(art: art, grid: grid)
+        } else {
+            DotDisc(active: media.isPlaying)
+        }
+    }
+}
+
+/// Columns of dots that bounce while music plays and rest on one muted row when paused.
+struct DotEqualizer: View {
+    let playing: Bool
+    var columns = 4
+    var rows = 4
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 12, paused: !playing || reduceMotion)) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            Canvas { context, size in
+                let width = size.width / CGFloat(columns)
+                let height = size.height / CGFloat(rows)
+                let radius = min(width, height) * 0.32
+                for column in 0..<columns {
+                    // Two out-of-step waves per column, so the bars never move in lockstep.
+                    let c = Double(column)
+                    let level = playing && !reduceMotion ? abs(0.6 * sin(time * (5.1 + c * 1.3) + c) + 0.4 * sin(time * (3.7 - c * 0.6) + c * 2)) : 0
+                    let lit = max(1, Int((level * Double(rows)).rounded(.up)))
+                    for row in 0..<rows {
+                        let color: Color = row >= lit ? Theme.dim : !playing ? Theme.muted : row == lit - 1 ? Theme.accent : Theme.ink
+                        let center = CGPoint(x: (CGFloat(column) + 0.5) * width, y: size.height - (CGFloat(row) + 0.5) * height)
+                        context.fill(dot(center, radius), with: .color(color))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// A ring of dots with a bright one chasing around it, for "working".
+struct DotSpinner: View {
+    var color = Theme.accent
+    var count = 8
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 10, paused: reduceMotion)) { timeline in
+            let head = Int(timeline.date.timeIntervalSinceReferenceDate * 10) % count
+            Canvas { context, size in
+                let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                let radius = min(size.width, size.height) / 2
+                for index in 0..<count {
+                    let angle = Double(index) / Double(count) * 2 * .pi - .pi / 2
+                    let point = CGPoint(x: center.x + cos(angle) * (radius - 1.5), y: center.y + sin(angle) * (radius - 1.5))
+                    // The head is bright; the two behind it fade into the dimmed ring.
+                    let behind = (head - index + count) % count
+                    let fill = behind == 0 ? color : behind < 3 ? color.opacity(0.6 - Double(behind) * 0.2) : Theme.dim
+                    context.fill(dot(point, radius * 0.16), with: .color(fill))
+                }
+            }
         }
     }
 }

@@ -6,6 +6,11 @@ enum Main {
     static let delegate = AppDelegate()
 
     static func main() {
+        // Run as an agent's hook: pass the event to the running Sidy and quit without starting the app.
+        let args = CommandLine.arguments
+        if let i = args.firstIndex(of: AgentHooks.marker), i + 1 < args.count {
+            return AgentHooks.forward(args[i + 1])
+        }
         let app = NSApplication.shared
         app.delegate = delegate
         app.setActivationPolicy(.accessory)
@@ -21,8 +26,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let updater = Updater()
     let clocks = Clocks()
     let notes = Notes()
+    let agents = Agents()
 
     private var panel: SidebarPanel!
+    private lazy var notch = NotchController(prefs: prefs) { [unowned self] size, events in
+        AnyView(NotchView(notch: size, events: events)
+            .environment(prefs).environment(media).environment(clocks).environment(system).environment(usage)
+            .environment(agents).environment(notes))
+    }
     private var statusItem: NSStatusItem!
     private let updateItem = NSMenuItem(title: "", action: #selector(installUpdate), keyEquivalent: "")
     private let updateSeparator = NSMenuItem.separator()
@@ -35,8 +46,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "--snapshot"), i + 1 < args.count {
-            snapshotPinned = args.dropFirst(i + 2).first.flatMap(Module.init)
-            snapshot(to: args[i + 1])
+            let subject = args.dropFirst(i + 2).first
+            snapshotPinned = subject.flatMap(Module.init)
+            subject == "notch" ? snapshotNotch(to: args[i + 1]) : snapshot(to: args[i + 1])
             return
         }
 
@@ -44,6 +56,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         usage.start()
         media.start()
         clocks.start()
+        agents.start()
+        AgentHooks.refresh(prefs)
 
         panel = SidebarPanel()
         panel.isOpaque = false
@@ -62,9 +76,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: panel, queue: .main) { [weak self] _ in
             self?.notes.editing = false
         }
-        prefs.onLayoutChange = { [weak self] in self?.placePanel() }
+        notch.update()
+        prefs.onLayoutChange = { [weak self] in
+            self?.placePanel()
+            self?.notch.update()
+        }
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             self?.placePanel()
+            self?.notch.update()
         }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -139,6 +158,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func openSettings() {
         if settingsWindow == nil {
             let hosting = NSHostingView(rootView: SettingsView().environment(prefs))
+            // The General and Notch pages differ in height; the window follows whichever is showing.
+            hosting.sizingOptions = [.minSize, .intrinsicContentSize, .maxSize]
             let window = NSWindow(contentRect: NSRect(origin: .zero, size: hosting.fittingSize),
                                   styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
             window.title = "Sidy"
@@ -173,6 +194,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         media.poll()
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [self] in
             let renderer = ImageRenderer(content: sidebar(animated: false).frame(width: Sidebar.maxWidth, height: 1000).background(Color(white: 0.05)))
+            renderer.scale = 2
+            if let tiff = renderer.nsImage?.tiffRepresentation,
+               let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+                try? png.write(to: URL(fileURLWithPath: path))
+            }
+            NSApp.terminate(nil)
+        }
+    }
+
+    /// Dev helper: renders the notch closed, peeking, open and on its AI tab, with live data, to a PNG and exits.
+    private func snapshotNotch(to path: String) {
+        system.start()
+        usage.refresh()
+        media.poll()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [self] in
+            let notch = CGSize(width: 200, height: 32)
+            let window = NotchView.windowSize(notch)
+            let states: [(NotchView.Phase, NotchView.Tab)] = [(.closed, .music), (.peek, .music), (.open, .music), (.open, .modules), (.open, .clocks), (.open, .ai)]
+            let views = VStack(spacing: 16) {
+                ForEach(Array(states.enumerated()), id: \.offset) { _, state in
+                    NotchView(notch: notch, phase: state.0, tab: state.1).frame(width: window.width, height: window.height)
+                }
+            }
+            let renderer = ImageRenderer(content: views
+                .environment(prefs).environment(media).environment(clocks).environment(system).environment(usage)
+                .environment(agents).environment(notes)
+                .background(Color(white: 0.3)))
             renderer.scale = 2
             if let tiff = renderer.nsImage?.tiffRepresentation,
                let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
