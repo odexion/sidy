@@ -220,31 +220,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Dev helper: renders the notch closed, peeking, open and on its AI tab, with live data, to a PNG and exits.
+    /// Dev helper: renders each state of the notch to `<path>-<state>.png` and exits. A made-up track stands in
+    /// for what's really playing; the gauges, timer and agent sessions are live.
     private func snapshotNotch(to path: String) {
         system.start()
         usage.refresh()
-        media.poll()
+        agents.start()
+        media.preview(title: "Low Tide", artist: "The Dot Matrix", source: "Spotify", duration: 214, elapsed: 83,
+                      artwork: DotArt(data: Self.sampleArtwork()))
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [self] in
             let notch = CGSize(width: 200, height: 32)
             let window = NotchView.windowSize(notch)
-            let states: [(NotchView.Phase, NotchView.Tab)] = [(.closed, .music), (.peek, .music), (.open, .music), (.open, .modules), (.open, .clocks), (.open, .ai)]
-            let views = VStack(spacing: 16) {
-                ForEach(Array(states.enumerated()), id: \.offset) { _, state in
-                    NotchView(notch: notch, phase: state.0, tab: state.1).frame(width: window.width, height: window.height)
+            // Room under the open notch for its shadow.
+            let open = NotchView.openSize(notch).height + 22, tall = NotchView.openSize(notch, tall: true).height + 22
+            let finished = NotchMessage(icon: Agent.claude.icon, title: "Claude finished", detail: "sidy",
+                                        body: "Added a notch-only mode and typed timer times.", tint: Theme.done)
+            let states: [(String, NotchView.Phase, NotchView.Tab, NotchMessage?, CGFloat)] = [
+                ("closed", .closed, .music, nil, notch.height + 24),
+                ("peek", .peek, .music, finished, notch.height + 70),
+                ("music", .open, .music, nil, open),
+                ("modules", .open, .modules, nil, open),
+                ("timer", .open, .clocks, nil, tall),
+                ("ai", .open, .ai, nil, tall),
+            ]
+            for (name, phase, tab, message, height) in states {
+                let view = NotchView(notch: notch, phase: phase, tab: tab, message: message)
+                    .frame(width: window.width, height: height, alignment: .top)
+                    .environment(prefs).environment(media).environment(clocks).environment(system).environment(usage)
+                    .environment(agents).environment(notes)
+                    .background(LinearGradient(colors: [Color(white: 0.2), Color(white: 0.13)], startPoint: .top, endPoint: .bottom))
+                let renderer = ImageRenderer(content: view)
+                renderer.scale = 2
+                if let tiff = renderer.nsImage?.tiffRepresentation,
+                   let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+                    try? png.write(to: URL(fileURLWithPath: "\(path)-\(name).png"))
                 }
-            }
-            let renderer = ImageRenderer(content: views
-                .environment(prefs).environment(media).environment(clocks).environment(system).environment(usage)
-                .environment(agents).environment(notes)
-                .background(Color(white: 0.3)))
-            renderer.scale = 2
-            if let tiff = renderer.nsImage?.tiffRepresentation,
-               let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
-                try? png.write(to: URL(fileURLWithPath: path))
             }
             NSApp.terminate(nil)
         }
+    }
+
+    /// Stand-in album art: a sunset of soft bands, so renders don't show anyone's real cover.
+    private static func sampleArtwork() -> Data {
+        let image = NSImage(size: NSSize(width: 96, height: 96), flipped: false) { rect in
+            NSGradient(colors: [NSColor(red: 0.98, green: 0.45, blue: 0.3, alpha: 1), NSColor(red: 0.55, green: 0.2, blue: 0.55, alpha: 1),
+                                NSColor(red: 0.12, green: 0.1, blue: 0.35, alpha: 1)])?.draw(in: rect, angle: 90)
+            NSColor(red: 1, green: 0.8, blue: 0.4, alpha: 1).setFill()
+            NSBezierPath(ovalIn: NSRect(x: 30, y: 30, width: 36, height: 36)).fill()
+            NSColor(red: 0.1, green: 0.08, blue: 0.25, alpha: 1).setFill()
+            NSBezierPath(rect: NSRect(x: 0, y: 0, width: 96, height: 34)).fill()
+            return true
+        }
+        return image.tiffRepresentation ?? Data()
     }
 }
 

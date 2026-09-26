@@ -133,6 +133,21 @@ final class NowPlaying {
         }
     }
 
+    /// Shows a made-up track, for renders of the notch that shouldn't show whatever is really playing.
+    func preview(title: String, artist: String, source: String, duration: Double, elapsed: Double, artwork: DotArt?) {
+        stopStream()
+        timer?.invalidate()
+        self.title = title
+        self.artist = artist
+        self.source = source
+        self.duration = duration
+        self.elapsed = elapsed
+        elapsedAt = Date()
+        isPlaying = true
+        storedArtwork = artwork
+        artworkKey = trackKey
+    }
+
     func playPause() { send("mb_toggle") }
     func next() { send("mb_next") }
     func previous() { send("mb_previous") }

@@ -49,7 +49,26 @@ Sidy sits on the edge of your desktop as a slim pill of gauges. Hover a tile to 
 
 ## Notch player
 
+<p align="center">
+  <img src="docs/notch-music.png" width="560" alt="The open notch on its music tab, with dotted album art, the seek bar and controls">
+</p>
+
 Turn it on in **Settings → Notch**, or with **Show Notch** in the menu bar menu. Music lives in the notch: while a track is loaded, the notch widens to show the album art in dots and a small equalizer. New tracks peek out underneath for a moment. Hover the notch to drop it open on the music tab, with the seek bar and controls. Other tabs hold the timer and alarm controls, and, if you turn them on, your sidebar's gauges and your AI agent sessions. The `•••` beside them opens the notch's settings.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/notch-closed.png" alt="The closed notch with album art and an equalizer"><br><sub><b>Closed:</b> the track's art and an equalizer beside the camera</sub></td>
+    <td width="50%"><img src="docs/notch-peek.png" alt="A finished Claude reply peeking out of the notch"><br><sub><b>Peek:</b> a new track or a finished agent reply</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/notch-modules.png" alt="The modules tab with CPU, GPU, memory and other gauges"><br><sub><b>Modules:</b> the sidebar's gauges in a row</sub></td>
+    <td><img src="docs/notch-timer.png" alt="The timer and alarm tab"><br><sub><b>Timer &amp; alarm:</b> presets, typed times and the daily alarm</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/notch-ai.png" alt="The AI tab with agent sessions as tiles"><br><sub><b>AI:</b> Claude Code and Codex sessions, colored by state</sub></td>
+    <td></td>
+  </tr>
+</table>
 
 It also shows:
 
@@ -106,16 +125,33 @@ Sidy checks for new releases at launch and every 6 hours. When one is out, an or
 - **Claude limits** use the sign-in Claude Code stores in your keychain. **Codex limits** use `~/.codex/auth.json`. Each is sent only to its own provider's usage endpoint. Neither endpoint is officially documented, so either may change.
 - **Now Playing:** macOS only lets Apple-signed processes read the system "now playing" session. Sidy therefore loads a small helper library (`Sources/MediaBridge`) inside `/usr/bin/perl` to read it. This is an unofficial workaround that a future macOS update could break.
 
+## Performance
+
+Measured on a MacBook Pro (M4 Pro, 24 GB, macOS 27) running Sidy 1.6.0 with music playing. Each setup ran for 45 seconds after it settled, sampled once a second with `top`. CPU is a share of one core.
+
+| Setup | CPU average | CPU peak (95th %) | Memory average |
+| --- | --- | --- | --- |
+| Sidebar only: pill, default modules, no notch | 1.3% | 3.6% | 94 MB |
+| **Full:** pill with every module, notch with every feature, closed | 5.4% | 8.4% | 164 MB |
+| Full, notch held open on the music tab | 9.5% | 21% | 185 MB |
+| Full, with the detailed card grid in place of the pill | 14.4% | 18.9% | 175 MB |
+
+- **Now Playing helper:** the long-running bridge process uses about 0.01% CPU and 4.5 MB. It only wakes when the track or playback changes.
+- **Agent hooks:** each Claude Code or Codex event starts Sidy briefly as a hook, which finishes in about 10 ms. The hooks run in the background, so they never hold up a reply.
+- **Memory** is highest right after launch and settles over the first few minutes. The sidebar-only setup was down to a 34 MB footprint a minute after launch.
+- **Network:** Claude and Codex limits refresh every 5 minutes, and Sidy checks for updates every 6 hours.
+- **Size:** the app is 3.8 MB, and the download is 1.1 MB.
+
 ## Building
 
 ```sh
 ./build.sh            # build/Sidy.app
-./build.sh --install  # copy to ~/Applications and launch
+./build.sh --install  # replace the installed copy and launch it
 ./build.sh --release  # also package build/Sidy-<version>-arm64.zip
 swift scripts/make-icon.swift  # regenerate the app icon
 ```
 
-`SIDY_FLOATING=1 .build/debug/Sidy` keeps the panel above other windows while developing.
+`SIDY_FLOATING=1 .build/debug/Sidy` keeps the panel above other windows while developing. `.build/debug/Sidy --snapshot docs/notch notch` renders the notch images above.
 
 ## Credits
 

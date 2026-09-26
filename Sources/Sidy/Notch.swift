@@ -215,13 +215,15 @@ struct NotchView: View {
     @State private var swipe = CGSize.zero
     @State private var swiped = false
 
+    /// `phase`, `tab` and `message` set where it starts, for renders of its states.
     init(notch: CGSize, events: NotchEvents = NotchEvents(), openSettings: @escaping () -> Void = {},
-         phase: Phase = .closed, tab: Tab = .music) {
+         phase: Phase = .closed, tab: Tab = .music, message: NotchMessage? = nil) {
         self.notch = notch
         self.events = events
         self.openSettings = openSettings
         _phase = State(initialValue: phase)
         _tab = State(initialValue: tab)
+        _message = State(initialValue: message)
     }
 
     var body: some View {
@@ -602,21 +604,28 @@ struct NotchView: View {
             usagePage
         } else {
             // Two rows show at a time; more scroll, with a fade at the bottom edge saying so.
-            let scrolls = agentsScroll
             TimelineView(.periodic(from: .now, by: 30)) { _ in
-                ScrollView(.vertical) {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2), spacing: 8) {
-                        ForEach(agents.ordered) { sessionTile($0) }
+                // Two tiles a row. There are only ever a dozen, so plain stacks rather than a lazy grid.
+                let ordered = agents.ordered
+                let grid = VStack(spacing: 8) {
+                    ForEach(Array(stride(from: 0, to: ordered.count, by: 2)), id: \.self) { index in
+                        HStack(spacing: 10) {
+                            sessionTile(ordered[index])
+                            if index + 1 < ordered.count { sessionTile(ordered[index + 1]) } else { Color.clear.frame(maxWidth: .infinity) }
+                        }
                     }
-                    .padding(.bottom, scrolls ? 12 : 0)
                 }
-                .scrollIndicators(.never)
-                .scrollDisabled(!scrolls)
-                .mask(
-                    LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: scrolls ? 0.82 : 1),
-                                           .init(color: scrolls ? .clear : .black, location: 1)],
-                                   startPoint: .top, endPoint: .bottom)
-                )
+                if agentsScroll {
+                    ScrollView(.vertical) { grid.padding(.bottom, 12) }
+                        .scrollIndicators(.never)
+                        .mask(
+                            LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.82),
+                                                   .init(color: .clear, location: 1)],
+                                           startPoint: .top, endPoint: .bottom)
+                        )
+                } else {
+                    grid.frame(maxHeight: .infinity, alignment: .top)
+                }
             }
         }
     }
