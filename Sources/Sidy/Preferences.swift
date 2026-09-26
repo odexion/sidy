@@ -9,6 +9,9 @@ enum Module: String, CaseIterable, Identifiable {
     /// Off until turned on in Settings.
     static let optIn: Set<Module> = [.timer, .alarm, .notes]
 
+    /// Shows plan limits that can be refreshed on demand.
+    var showsUsage: Bool { self == .claude || self == .codex }
+
     var title: String {
         switch self {
         case .cpu: "CPU Load"
@@ -55,6 +58,9 @@ enum SidebarEdge: String, CaseIterable {
     case left, right
 }
 
+/// The page Settings opens on; the notch's settings button asks for the Notch page.
+enum SettingsPage { case general, notch }
+
 /// Which displays get a notch panel.
 enum NotchDisplay: String, CaseIterable {
     case notched, main, all
@@ -67,8 +73,9 @@ enum NotchFeature: String, CaseIterable {
     case trackPeek, clocks, battery, limits, heat, usageTab, modulesTab
     case claudeCode, codex
 
-    /// Off until turned on in Settings. The agents' hooks edit their settings files, so they wait to be asked.
-    static let optIn: Set<NotchFeature> = [.scrollVolume, .claudeCode, .codex]
+    /// Off until turned on in Settings. The agents' hooks edit their settings files, so they wait to be asked;
+    /// the modules and AI tabs are extras beyond the music the notch is for.
+    static let optIn: Set<NotchFeature> = [.scrollVolume, .claudeCode, .codex, .modulesTab, .usageTab]
 
     static let behavior: [NotchFeature] = [.hover, .haptics, .hideInFullScreen]
     static let gestures: [NotchFeature] = [.swipeTracks, .swipeOpen, .scrollVolume]
@@ -123,6 +130,8 @@ final class Preferences {
 
     var order: [Module] { didSet { defaults.set(order.map(\.rawValue), forKey: "order") } }
     var hidden: Set<Module> { didSet { defaults.set(hidden.map(\.rawValue), forKey: "hidden") } }
+    /// Off makes Sidy a notch-only (or menu-bar-only) app.
+    var sidebar: Bool { didSet { defaults.set(sidebar, forKey: "sidebar"); onLayoutChange?() } }
     var edge: SidebarEdge { didSet { defaults.set(edge.rawValue, forKey: "edge"); onLayoutChange?() } }
     var showHeader: Bool { didSet { defaults.set(showHeader, forKey: "showHeader") } }
     var detailed: Bool { didSet { defaults.set(detailed, forKey: "detailed") } }
@@ -132,6 +141,9 @@ final class Preferences {
     var notchFeatures: Set<NotchFeature> {
         didSet { defaults.set(notchFeatures.map(\.rawValue), forKey: "notch.features"); onLayoutChange?() }
     }
+
+    /// Not saved: Settings shows whichever page was last asked for.
+    var settingsPage = SettingsPage.general
 
     @ObservationIgnored var onLayoutChange: (() -> Void)?
 
@@ -143,6 +155,7 @@ final class Preferences {
         order = saved + added
         // Modules new to this Mac start hidden if they are opt-in. Saving both lists now marks them as seen.
         hidden = Set((defaults.stringArray(forKey: "hidden") ?? []).compactMap(Module.init)).union(added.filter(Module.optIn.contains))
+        sidebar = defaults.object(forKey: "sidebar") as? Bool ?? true
         edge = SidebarEdge(rawValue: defaults.string(forKey: "edge") ?? "") ?? .right
         showHeader = defaults.object(forKey: "showHeader") as? Bool ?? true
         detailed = defaults.bool(forKey: "detailed")

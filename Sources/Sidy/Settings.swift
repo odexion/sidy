@@ -5,17 +5,15 @@ struct SettingsView: View {
     static let width: CGFloat = 340
     private static let rowHeight: CGFloat = 34
 
-    private enum Page { case general, notch }
-
     @Environment(Preferences.self) private var prefs
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
-    @State private var page = Page.general
     @State private var hookError: String?
     /// The Notch page has more rows; slightly shorter ones keep it on a 13-inch screen.
     private static let notchRowHeight: CGFloat = 30
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        @Bindable var prefs = prefs
+        return VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("SIDY").font(Theme.display(30)).kerning(3).foregroundStyle(Theme.ink)
@@ -25,11 +23,11 @@ struct SettingsView: View {
                     }
                 }
                 Spacer()
-                SegmentedPicker(selection: $page, options: [(.general, "General"), (.notch, "Notch")])
+                SegmentedPicker(selection: $prefs.settingsPage, options: [(.general, "General"), (.notch, "Notch")])
             }
             .padding(.bottom, 22)
 
-            switch page {
+            switch prefs.settingsPage {
             case .general: general
             case .notch: notch
             }
@@ -66,11 +64,13 @@ struct SettingsView: View {
 
             sectionLabel("02", "Layout")
             VStack(spacing: 0) {
-                settingRow("Screen edge") {
+                settingRow("Show sidebar") { Toggle("", isOn: $prefs.sidebar) }
+                    .help("Off: use Sidy from the notch and the menu bar only")
+                settingRow("Screen edge", enabled: prefs.sidebar) {
                     SegmentedPicker(selection: $prefs.edge, options: [(.left, "Left"), (.right, "Right")])
                 }
-                settingRow("Detailed style") { Toggle("", isOn: $prefs.detailed) }
-                settingRow("Show header", enabled: prefs.detailed) { Toggle("", isOn: $prefs.showHeader) }
+                settingRow("Detailed style", enabled: prefs.sidebar) { Toggle("", isOn: $prefs.detailed) }
+                settingRow("Show header", enabled: prefs.sidebar && prefs.detailed) { Toggle("", isOn: $prefs.showHeader) }
                 settingRow("Launch at login") {
                     Toggle("", isOn: $launchAtLogin)
                         .onChange(of: launchAtLogin) { _, enabled in

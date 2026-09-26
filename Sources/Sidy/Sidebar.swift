@@ -9,6 +9,7 @@ struct Sidebar: View {
     var pinned: Module?
     /// Plays the opening animation when the sidebar first appears.
     var animated = true
+    @Environment(AIUsage.self) private var usage
     @Environment(Preferences.self) private var prefs
     @State private var revealed = false
 
@@ -49,6 +50,10 @@ struct Sidebar: View {
                                 ModuleCard(module: module, index: index + 1)
                                     .reveal(rank: centerRank(index, of: modules.count), scale: 0.92)
                                     .contextMenu {
+                                        if module.showsUsage {
+                                            Button("Refresh Usage", action: usage.refresh)
+                                            Divider()
+                                        }
                                         Button("Hide \(module.title)") { prefs.toggle(module) }
                                         Button("Settings…", action: openSettings)
                                     }

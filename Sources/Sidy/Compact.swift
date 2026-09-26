@@ -6,6 +6,7 @@ struct CompactBar: View {
     @Environment(Preferences.self) private var prefs
     @Environment(Clocks.self) private var clocks
     @Environment(Notes.self) private var notes
+    @Environment(AIUsage.self) private var usage
     @Environment(\.revealed) private var revealed
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -48,6 +49,10 @@ struct CompactBar: View {
                                 .onEnded { _ in withAnimation(.spring(duration: 0.25)) { drag = nil } }
                         )
                         .contextMenu {
+                            if module.showsUsage {
+                                Button("Refresh Usage", action: usage.refresh)
+                                Divider()
+                            }
                             Button("Hide \(module.title)") { prefs.toggle(module) }
                             Button("Settings…", action: openSettings)
                         }
@@ -77,7 +82,11 @@ struct CompactBar: View {
         .animation(.easeOut(duration: 0.15), value: shown)
     }
 
-    private var shown: Module? { drag == nil ? hovered ?? pinned ?? (notes.editing ? .notes : nil) : nil }
+    /// A note or time being typed keeps its card open after the pointer leaves.
+    private var shown: Module? {
+        guard drag == nil else { return nil }
+        return hovered ?? pinned ?? (notes.editing ? .notes : nil) ?? clocks.editing.map { $0 == .timer ? .timer : .alarm }
+    }
 
     /// Opens as a circle at full width that stretches up and down from its middle.
     private var pill: some View {

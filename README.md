@@ -41,26 +41,26 @@ Sidy sits on the edge of your desktop as a slim pill of gauges. Hover a tile to 
 | Battery | Charge, power source and time remaining |
 | Now Playing | Spotify, Music, or YouTube Music in any browser, with controls and a seek bar |
 | System | Thermal state, uptime and load average |
-| Timer* | Countdown with presets, pause and +1 minute |
-| Alarm* | Daily alarm with snooze and a countdown to the next ring |
+| Timer* | Countdown with presets, pause and +1 minute. Click the time to type one |
+| Alarm* | Daily alarm with snooze and a countdown to the next ring. Click the time to type one |
 | Notes* | A scratch note, saved as you type |
 
 \*Off by default. Turn them on in Settings → Modules.
 
 ## Notch player
 
-Turn it on in **Settings → Notch**. Music lives in the notch: while a track is loaded, the notch widens to show the album art in dots and a small equalizer. New tracks peek out underneath for a moment. Hover the notch to drop it open with the seek bar and controls. Its tabs hold the timer and alarm controls, and your AI agent sessions.
+Turn it on in **Settings → Notch**, or with **Show Notch** in the menu bar menu. Music lives in the notch: while a track is loaded, the notch widens to show the album art in dots and a small equalizer. New tracks peek out underneath for a moment. Hover the notch to drop it open on the music tab, with the seek bar and controls. Other tabs hold the timer and alarm controls, and, if you turn them on, your sidebar's gauges and your AI agent sessions. The `•••` beside them opens the notch's settings.
 
 It also shows:
 
 - A running timer counting down beside the notch. A ringing timer or alarm drops down with Stop.
 - Short alerts for plugging in, unplugging and low battery, for a Claude or Codex limit dropping under 20% and 10%, and for the Mac running hot.
 
-**AI agents:** turn on **Claude Code** or **Codex** under Settings → Notch → AI agents, and the notch tells you when a reply in your terminal finishes or the agent needs your permission. It shows the project and the start of the reply; click it to bring the terminal forward. The AI tab lists recent sessions, and your Claude and Codex limits when none are running. Turning a switch on adds Sidy's hooks to `~/.claude/settings.json` or `~/.codex/hooks.json`, next to any you already have. Turning it off removes them again, and the file's original is kept once as `.sidy-backup`.
+**AI agents:** turn on **Claude Code** or **Codex** under Settings → Notch → AI agents, and the notch tells you when a reply in your terminal finishes or the agent needs your permission. It shows the project and the start of the reply; click it to bring the terminal forward. The AI tab lists your sessions as tiles, colored by state (running, needs you, done or stopped), and shows your Claude and Codex limits when none are running. Codex asks you to approve new hooks once with `/hooks`. Turning a switch on adds Sidy's hooks to `~/.claude/settings.json` or `~/.codex/hooks.json`, next to any you already have. Turning it off removes them again, and the file's original is kept once as `.sidy-backup`.
 
-Gestures work with two fingers on the notch. Swipe sideways to change tracks, swipe down to open and up to close. Scroll-for-volume changes the volume on the open notch.
+Gestures work with two fingers on the notch. Swipe down to open and up to close. Swipe sideways to change tracks, and scroll for volume, on the closed notch or the music tab.
 
-Every part can be switched off in Settings → Notch, and hovering a setting explains it. Scroll-for-volume starts off. By default the notch sits on the built-in display, or the main one when the lid is closed, and hides while an app is full screen. On displays without a notch, it hangs from the middle of the menu bar.
+Every part can be switched on or off in Settings → Notch, and hovering a setting explains it. Scroll-for-volume, the modules and AI tabs, and the Claude Code and Codex alerts start off. By default the notch sits on the built-in display, or the main one when the lid is closed, and hides while an app is full screen. On displays without a notch, it hangs from the middle of the menu bar.
 
 When a player doesn't share its artwork (browsers often drop it), Sidy looks the track up in the iTunes catalog, sending the title and artist to Apple.
 
@@ -68,8 +68,10 @@ When a player doesn't share its artwork (browsers often drop it), Sidy looks the
 
 - **Reorder:** drag tiles up or down the pill.
 - **Hide a section:** right-click its tile.
+- **Refresh AI usage:** right-click the Claude or Codex tile.
 - **Settings:** click the `•••` under the pill to show or hide sections, reorder them, pick the screen edge, switch to the detailed card grid, or launch Sidy at login.
-- **Menu bar:** the gauge icon opens Settings, refreshes AI usage, replays the opening animation, checks for updates or quits Sidy.
+- **Notch only:** turn off **Show sidebar** in Settings → General to use Sidy from the notch and the menu bar alone.
+- **Menu bar:** the gauge icon opens Settings, shows or hides the sidebar and the notch, refreshes AI usage, replays the opening animation, checks for updates or quits Sidy.
 
 ## Install options
 

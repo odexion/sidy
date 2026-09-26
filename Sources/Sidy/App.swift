@@ -30,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var panel: SidebarPanel!
     private lazy var notch = NotchController(prefs: prefs) { [unowned self] size, events in
-        AnyView(NotchView(notch: size, events: events)
+        AnyView(NotchView(notch: size, events: events, openSettings: { [weak self] in self?.showSettings(.notch) })
             .environment(prefs).environment(media).environment(clocks).environment(system).environment(usage)
             .environment(agents).environment(notes))
     }
@@ -38,6 +38,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let updateItem = NSMenuItem(title: "", action: #selector(installUpdate), keyEquivalent: "")
     private let updateSeparator = NSMenuItem.separator()
     private let updateDot = NSView()
+    private let sidebarItem = NSMenuItem(title: "Show Sidebar", action: #selector(toggleSidebar), keyEquivalent: "")
+    private let notchItem = NSMenuItem(title: "Show Notch", action: #selector(toggleNotch), keyEquivalent: "")
+    private let replayItem = NSMenuItem(title: "Replay Opening Animation", action: #selector(replayAnimation), keyEquivalent: "")
     private var settingsWindow: NSWindow?
     private var snapshotPinned: Module?
 
@@ -70,11 +73,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Size the panel first: a layout at zero size would make the opening animation fly in from a corner.
         placePanel()
         panel.contentView = NSHostingView(rootView: sidebar())
-        panel.orderFrontRegardless()
 
         // Clicking away from a note ends editing, which lets its card close.
         NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: panel, queue: .main) { [weak self] _ in
             self?.notes.editing = false
+            self?.clocks.editing = nil
         }
         notch.update()
         prefs.onLayoutChange = { [weak self] in
@@ -104,11 +107,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(updateItem)
         menu.addItem(updateSeparator)
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        sidebarItem.target = self
+        menu.addItem(sidebarItem)
+        notchItem.target = self
+        menu.addItem(notchItem)
         menu.addItem(withTitle: "Refresh AI Usage", action: #selector(refreshUsage), keyEquivalent: "r").target = self
-        menu.addItem(withTitle: "Replay Opening Animation", action: #selector(replayAnimation), keyEquivalent: "").target = self
+        replayItem.target = self
+        menu.addItem(replayItem)
         menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Sidy", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.delegate = self
         statusItem.menu = menu
 
         updater.onChange = { [weak self] in self?.showUpdateState() }
@@ -134,6 +143,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func installUpdate() { updater.install() }
+    @objc func toggleNotch() { prefs.notch.toggle() }
+    @objc func toggleSidebar() { prefs.sidebar.toggle() }
     @objc func checkForUpdates() { updater.check(manual: true) }
 
     private func sidebar(animated: Bool = true) -> some View {
@@ -153,6 +164,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let width = Sidebar.maxWidth
         let x = prefs.edge == .left ? area.minX : area.maxX - width
         panel.setFrame(NSRect(x: x, y: area.minY, width: width, height: area.height), display: true)
+        if prefs.sidebar { panel.orderFrontRegardless() } else { panel.orderOut(nil) }
+    }
+
+    func showSettings(_ page: SettingsPage) {
+        prefs.settingsPage = page
+        openSettings()
     }
 
     @objc func openSettings() {
@@ -228,6 +245,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             NSApp.terminate(nil)
         }
+    }
+}
+
+extension AppDelegate: NSMenuDelegate {
+    /// The notch can also be switched in Settings, so the checkmark is read fresh each time the menu opens.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        sidebarItem.state = prefs.sidebar ? .on : .off
+        notchItem.state = prefs.notch ? .on : .off
+        replayItem.isEnabled = prefs.sidebar
     }
 }
 

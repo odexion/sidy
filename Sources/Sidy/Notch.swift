@@ -25,6 +25,8 @@ extension NSScreen {
 /// Hands events the notch view can't get from SwiftUI (two-finger scrolls) to it.
 final class NotchEvents {
     var scroll: ((NSEvent) -> Void)?
+    /// The panel gave up the keyboard, e.g. after a click in another app.
+    var resigned: (() -> Void)?
 }
 
 /// A transparent panel over the menu bar, centered on the notch. Like the sidebar, its empty areas pass clicks through.
@@ -46,6 +48,11 @@ final class NotchPanel: NSPanel {
 
     /// Windows are normally kept below the menu bar; this one belongs on top of it.
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
+
+    override func resignKey() {
+        super.resignKey()
+        events.resigned?()
+    }
 
     override func sendEvent(_ event: NSEvent) {
         if event.type == .scrollWheel { events.scroll?(event) }
@@ -191,6 +198,7 @@ struct NotchView: View {
 
     let notch: CGSize
     let events: NotchEvents
+    var openSettings: () -> Void = {}
     @Environment(NowPlaying.self) private var media
     @Environment(Preferences.self) private var prefs
     @Environment(Clocks.self) private var clocks
@@ -203,12 +211,15 @@ struct NotchView: View {
     @State private var hoverWork: DispatchWorkItem?
     @State private var peekWork: DispatchWorkItem?
     @State private var volumeWork: DispatchWorkItem?
+    @State private var inside = false
     @State private var swipe = CGSize.zero
     @State private var swiped = false
 
-    init(notch: CGSize, events: NotchEvents = NotchEvents(), phase: Phase = .closed, tab: Tab = .music) {
+    init(notch: CGSize, events: NotchEvents = NotchEvents(), openSettings: @escaping () -> Void = {},
+         phase: Phase = .closed, tab: Tab = .music) {
         self.notch = notch
         self.events = events
+        self.openSettings = openSettings
         _phase = State(initialValue: phase)
         _tab = State(initialValue: tab)
     }
@@ -241,7 +252,15 @@ struct NotchView: View {
             guard let session = announcement.flatMap({ agents.session($0.session) }), prefs.has(session.agent.feature) else { return }
             peek(message(for: session), for: 6)
         }
-        .onAppear { events.scroll = scroll }
+        .onAppear {
+            events.scroll = scroll
+            // Clicking away from a time being typed ends the typing, which lets the notch close.
+            events.resigned = { if clocks.editing != nil { clocks.editing = nil } }
+        }
+        // Typing held the notch open; once it ends, close if the pointer has already left.
+        .onChange(of: clocks.editing) { _, editing in
+            if editing == nil, !inside, phase == .open { hover(false) }
+        }
     }
 
     // MARK: State
@@ -433,7 +452,7 @@ struct NotchView: View {
                     tabButton("music.note", "Music", .music)
                     if prefs.has(.modulesTab) { tabButton("gauge.with.dots.needle.50percent", "Modules", .modules) }
                     if prefs.has(.clocks) { tabButton("timer", "Timer & alarm", .clocks) }
-                    if prefs.has(.usageTab) { tabButton("sparkle", "AI", .ai) }
+                    if prefs.has(.usageTab) { tabButton("terminal", "AI", .ai) }
                 }
             } else {
                 Text("NOW PLAYING").foregroundStyle(Theme.muted)
@@ -443,7 +462,7 @@ struct NotchView: View {
                 Image(systemName: volume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill")
                     .font(.system(size: 8))
                     .foregroundStyle(Theme.ink)
-                DotMeter(fraction: Double(volume), count: 12).frame(width: 60, height: 5)
+                DotMeter(fraction: Double(volume), count: 10).frame(width: 48, height: 5)
             } else {
                 switch page {
                 case .music:
@@ -452,13 +471,15 @@ struct NotchView: View {
                         Circle().fill(color).frame(width: 4, height: 4)
                         Text(source.uppercased()).foregroundStyle(color)
                     }
-                case .modules:
-                    Text("MODULES").foregroundStyle(Theme.muted)
-                case .clocks:
-                    Text("TIMER & ALARM").foregroundStyle(Theme.muted)
+                case .modules, .clocks:
+                    EmptyView()
                 case .ai:
                     sessionsSummary
                 }
+            }
+            NotchSettingsDots {
+                phase = .closed
+                openSettings()
             }
         }
         .font(Theme.label)
@@ -541,7 +562,11 @@ struct NotchView: View {
             } else {
                 HStack(spacing: spacing) {
                     ForEach(modules) { module in
-                        ModuleTile(module: module, width: width).help(module.title)
+                        ModuleTile(module: module, width: width)
+                            .help(module.title)
+                            .contextMenu {
+                                if module.showsUsage { Button("Refresh Usage", action: usage.refresh) }
+                            }
                     }
                 }
             }
@@ -678,6 +703,8 @@ struct NotchView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
+        .contentShape(Rectangle())
+        .contextMenu { Button("Refresh Usage", action: usage.refresh) }
     }
 
     // MARK: Pointer
@@ -685,6 +712,7 @@ struct NotchView: View {
     /// A short delay before opening lets the pointer cross the notch on its way to the menu bar;
     /// a longer one before closing forgives brief slips off the edge.
     private func hover(_ inside: Bool) {
+        self.inside = inside
         hoverWork?.cancel()
         if inside && !prefs.has(.hover) { return }
         let work = DispatchWorkItem { inside ? open(haptic: true) : close() }
@@ -703,8 +731,9 @@ struct NotchView: View {
     }
 
     private func close() {
-        // Stay open while a button is held, so a scrub that strays off the edge isn't cut short.
-        if NSEvent.pressedMouseButtons != 0 { return hover(false) }
+        // Stay open while a button is held, so a scrub that strays off the edge isn't cut short,
+        // and while a time is being typed.
+        if NSEvent.pressedMouseButtons != 0 || clocks.editing != nil { return hover(false) }
         phase = .closed
     }
 
@@ -781,6 +810,26 @@ struct NotchView: View {
         let work = DispatchWorkItem { volume = nil }
         volumeWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: work)
+    }
+}
+
+/// "•••" like the one under the sidebar's pill; opens Sidy's notch settings.
+private struct NotchSettingsDots: View {
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 2.5) {
+            ForEach(0..<3, id: \.self) { _ in
+                Circle().fill(hovering ? Theme.accent : Theme.muted).frame(width: 3, height: 3)
+            }
+        }
+        .frame(width: 20, height: 16)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .onTapGesture(perform: action)
+        .help("Notch settings")
+        .padding(.leading, 4)
     }
 }
 

@@ -357,7 +357,9 @@ struct TimerControls: View {
                 if ringing {
                     BigValue(value: "DONE", size: 30)
                 } else {
-                    DotClock(text: Format.clock(clocks.timerActive ? clocks.timeLeft.rounded(.up) : clocks.duration))
+                    // Typing a length only makes sense before the timer starts.
+                    EditableClock(text: Format.clock(clocks.timerActive ? clocks.timeLeft.rounded(.up) : clocks.duration),
+                                  field: .timer, editable: !clocks.timerActive, commit: clocks.setDuration)
                 }
                 Spacer(minLength: 4)
                 if !clocks.timerActive && !ringing {
@@ -402,8 +404,8 @@ struct AlarmControls: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 8) {
                 stepper(hours: 1)
-                DotClock(text: clocks.alarmTime)
-                    .opacity(clocks.alarmOn || ringing ? 1 : 0.4)
+                EditableClock(text: clocks.alarmTime, field: .alarm, editable: !ringing, commit: clocks.setAlarm)
+                    .opacity(clocks.alarmOn || ringing || clocks.editing == .alarm ? 1 : 0.4)
                 stepper(minutes: 5)
                 Spacer(minLength: 0)
             }
@@ -428,6 +430,67 @@ struct AlarmControls: View {
             ClockButton(symbol: "chevron.up") { clocks.stepAlarm(hours: hours, minutes: minutes) }
             ClockButton(symbol: "chevron.down") { clocks.stepAlarm(hours: -hours, minutes: -minutes) }
         }
+    }
+}
+
+/// The time in the display font; click it to type a new one. Enter or clicking away saves, Esc cancels,
+/// and text that isn't a time leaves the old one.
+private struct EditableClock: View {
+    let text: String
+    let field: Clocks.Field
+    let editable: Bool
+    let commit: (String) -> Bool
+    @Environment(Clocks.self) private var clocks
+    @State private var draft = ""
+    @State private var done = false
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        if clocks.editing == field {
+            TextField("", text: $draft)
+                .textFieldStyle(.plain)
+                .font(Theme.display(30))
+                .foregroundStyle(Theme.accent)
+                .tint(Theme.accent)
+                .frame(width: 88)
+                .focused($focused)
+                .onAppear {
+                    draft = text
+                    done = false
+                    focused = true
+                }
+                .onSubmit { finish(save: true) }
+                .onExitCommand { finish(save: false) }
+                .onChange(of: focused) { _, focused in if !focused { finish(save: true) } }
+                // Editing can also end from outside, e.g. clicking another app; keep what was typed.
+                .onDisappear { if !done { _ = commit(draft) } }
+        } else {
+            DotClock(text: text)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    guard editable else { return }
+                    // A click on the time isn't a click in a text field, so the panel wouldn't take the keyboard
+                    // on its own and the typing would go to the app in front.
+                    Self.panelUnderPointer()?.makeKey()
+                    clocks.editing = field
+                }
+                .help(editable ? "Click to type a time" : "")
+        }
+    }
+
+    /// Sidy's frontmost window under the pointer: the notch or the sidebar.
+    private static func panelUnderPointer() -> NSWindow? {
+        let point = NSEvent.mouseLocation
+        return NSApp.windows
+            .filter { $0.isVisible && $0.canBecomeKey && $0.frame.contains(point) }
+            .max { $0.level.rawValue < $1.level.rawValue }
+    }
+
+    private func finish(save: Bool) {
+        guard !done else { return }
+        done = true
+        if save, draft != text { _ = commit(draft) }
+        if clocks.editing == field { clocks.editing = nil }
     }
 }
 

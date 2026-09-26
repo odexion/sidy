@@ -55,7 +55,7 @@ final class NowPlaying {
     }
 
     /// Something on screen shows the track.
-    private var wanted: Bool { prefs.visible.contains(.media) || prefs.notch }
+    private var wanted: Bool { (prefs.sidebar && prefs.visible.contains(.media)) || prefs.notch }
 
     /// Album art for the current track, once the player has sent it.
     var artwork: DotArt? { artworkKey != nil && artworkKey == trackKey ? storedArtwork : nil }
