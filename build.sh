@@ -1,12 +1,12 @@
 #!/bin/zsh
 # Builds Sidy.app (Apple silicon) into ./build.
-#   --install  copy it to ~/Applications and launch it
+#   --install  replace the installed copy (in /Applications, like the installer) and launch it
 #   --release  also zip it as build/Sidy-<version>-arm64.zip
 set -euo pipefail
 cd "$(dirname "$0")"
 
-VERSION=1.4.2
-BUILD=10
+VERSION=1.5.0
+BUILD=11
 
 swift build -c release --arch arm64 --product Sidy
 swift build -c release --arch arm64 --product MediaBridge
