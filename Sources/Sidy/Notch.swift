@@ -462,9 +462,9 @@ struct NotchView: View {
                 // Icons, since words wouldn't fit beside the camera.
                 HStack(spacing: 10) {
                     tabButton("music.note", "Music", .music)
-                    if prefs.has(.modulesTab) { tabButton("gauge.with.dots.needle.50percent", "Modules", .modules) }
+                    if prefs.has(.modulesTab) { tabButton("square.grid.2x2", "Modules", .modules) }
                     if prefs.has(.clocks) { tabButton("timer", "Timer & alarm", .clocks) }
-                    if prefs.has(.usageTab) { tabButton("terminal", "AI", .ai) }
+                    if prefs.has(.usageTab) { tabButton("AI", .ai) { DotHex().frame(width: 12, height: 12) } }
                 }
             } else {
                 Text("NOW PLAYING").foregroundStyle(Theme.muted)
@@ -525,10 +525,12 @@ struct NotchView: View {
 
     /// The selected tab's icon turns orange.
     private func tabButton(_ symbol: String, _ name: String, _ value: Tab) -> some View {
-        let selected = page == value
-        return Image(systemName: symbol)
-            .font(.system(size: 10, weight: .medium))
-            .foregroundStyle(selected ? Theme.accent : Theme.muted)
+        tabButton(name, value) { Image(systemName: symbol).font(.system(size: 10, weight: .medium)) }
+    }
+
+    private func tabButton(_ name: String, _ value: Tab, glyph: () -> some View) -> some View {
+        glyph()
+            .foregroundStyle(page == value ? Theme.accent : Theme.muted)
             .frame(width: 14, height: 14)
         .contentShape(Rectangle())
         .help(name)
@@ -910,6 +912,29 @@ private struct NotchAlerts: ViewModifier {
             let label = state.windows.indices.contains(index) ? state.windows[index].label : ""
             return show(NotchMessage(icon: icon, title: "\(name) \(label) limit", detail: Format.percent(1 - after) + "% left", alert: true, tab: .ai))
         }
+    }
+}
+
+/// The AI tab's icon: a hexagon of dots in the dot-matrix style, the dots shrinking from the center out.
+struct DotHex: Shape {
+    func path(in rect: CGRect) -> Path {
+        // Neighboring dots sit `step` apart; the outer ring's corners are two steps out.
+        let step = min(rect.width, rect.height) / 4.5
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        var path = Path()
+        func dot(angle: Double, distance: CGFloat, radius: CGFloat) {
+            let a = angle * .pi / 180
+            let x = center.x + cos(a) * distance, y = center.y - sin(a) * distance
+            path.addEllipse(in: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2))
+        }
+        dot(angle: 0, distance: 0, radius: step * 0.36)
+        for i in 0..<6 {
+            let corner = 90 + Double(i) * 60
+            dot(angle: corner, distance: step, radius: step * 0.28)
+            dot(angle: corner, distance: step * 2, radius: step * 0.2)
+            dot(angle: corner + 30, distance: step * sqrt(3), radius: step * 0.2)
+        }
+        return path
     }
 }
 

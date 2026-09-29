@@ -285,23 +285,20 @@ extension AppDelegate: NSMenuDelegate {
 }
 
 extension NSImage {
-    /// A small gauge, like the compact tiles: twelve evenly spaced ticks, the unfilled ones dimmed.
+    /// A small gauge: a closed ring, two-thirds filled clockwise from the top over a faint track, around a dot.
     static let menuBarIcon: NSImage = {
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
-            let center = NSPoint(x: 9, y: 9), ticks = 12, lit = 8
-            for tick in 0..<ticks {
-                let angle = Double(tick) / Double(ticks) * 2 * .pi
-                let direction = NSPoint(x: sin(angle), y: cos(angle))
-                let line = NSBezierPath()
-                line.move(to: NSPoint(x: center.x + direction.x * 5, y: center.y + direction.y * 5))
-                line.line(to: NSPoint(x: center.x + direction.x * 7.5, y: center.y + direction.y * 7.5))
-                line.lineWidth = 2
-                line.lineCapStyle = .round
-                NSColor.black.withAlphaComponent(tick < lit ? 1 : 0.35).setStroke()
-                line.stroke()
+            let center = NSPoint(x: 9, y: 9)
+            for (fraction, alpha) in [(1.0, 0.3), (0.65, 1.0)] as [(CGFloat, CGFloat)] {
+                let arc = NSBezierPath()
+                arc.appendArc(withCenter: center, radius: 6.5, startAngle: 90, endAngle: 90 - 360 * fraction, clockwise: true)
+                arc.lineWidth = 1.8
+                arc.lineCapStyle = .round
+                NSColor.black.withAlphaComponent(alpha).setStroke()
+                arc.stroke()
             }
             NSColor.black.setFill()
-            NSBezierPath(ovalIn: NSRect(x: 7, y: 7, width: 4, height: 4)).fill()
+            NSBezierPath(ovalIn: NSRect(x: 6, y: 6, width: 6, height: 6)).fill()
             return true
         }
         image.isTemplate = true
