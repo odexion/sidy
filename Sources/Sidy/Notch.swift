@@ -160,6 +160,8 @@ struct NotchMessage {
     var alert = false
     /// Overrides the alert color, e.g. green for a finished agent.
     var tint: Color?
+    /// The tab hovering opens on while the note shows and for a little while after.
+    var tab: NotchView.Tab = .music
     /// What clicking the notch does while the note shows.
     var action: (() -> Void)?
 }
@@ -185,6 +187,8 @@ struct NotchView: View {
     /// Springy on the way out, settled on the way back so it tucks into the notch without bouncing.
     private static let opening = Animation.spring(response: 0.42, dampingFraction: 0.78)
     private static let closing = Animation.spring(response: 0.38, dampingFraction: 1)
+    /// How long after a note goes away hovering still opens on its tab.
+    private static let noteLinger: TimeInterval = 12
 
     /// `tall` gives the timer and alarm controls the extra room they need.
     static func openSize(_ notch: CGSize, tall: Bool = false) -> CGSize {
@@ -207,6 +211,8 @@ struct NotchView: View {
     @State private var phase: Phase
     @State private var tab: Tab
     @State private var message: NotchMessage?
+    /// The tab of the latest note, and until when opening the notch goes to it.
+    @State private var noteTab: (tab: Tab, until: Date)?
     @State private var volume: Float?
     @State private var hoverWork: DispatchWorkItem?
     @State private var peekWork: DispatchWorkItem?
@@ -253,6 +259,10 @@ struct NotchView: View {
         .onChange(of: agents.announcement) { _, announcement in
             guard let session = announcement.flatMap({ agents.session($0.session) }), prefs.has(session.agent.feature) else { return }
             peek(message(for: session), for: 6)
+        }
+        // Stopping a ringing timer or alarm leaves hovering on its tab for a while.
+        .onChange(of: ringing) { _, _ in
+            noteTab = (.clocks, Date() + Self.noteLinger)
         }
         .onAppear {
             events.scroll = scroll
@@ -682,7 +692,7 @@ struct NotchView: View {
         default: ("\(session.agent.name) finished", false)
         }
         return NotchMessage(icon: session.agent.icon, title: title, detail: session.project, body: session.summary,
-                            alert: alert, tint: session.state.color, action: { [agents] in agents.focus(session) })
+                            alert: alert, tint: session.state.color, tab: .ai, action: { [agents] in agents.focus(session) })
     }
 
     private var usagePage: some View {
@@ -734,8 +744,13 @@ struct NotchView: View {
         guard phase != .open, ringing == nil else { return }
         peekWork?.cancel()
         if haptic { tap() }
-        // Every opening starts on the music tab, whichever tab was left open last time.
-        tab = .music
+        // Every opening starts on the music tab, whichever tab was left open last time,
+        // unless a note just showed: then it opens on the note's tab.
+        if let noteTab, noteTab.until > Date() {
+            tab = noteTab.tab
+        } else {
+            tab = .music
+        }
         phase = .open
     }
 
@@ -753,7 +768,10 @@ struct NotchView: View {
         peekWork?.cancel()
         let work = DispatchWorkItem { if phase == .peek { phase = .closed } }
         peekWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + (seconds ?? (message == nil ? 3 : 4)), execute: work)
+        let seconds = seconds ?? (message == nil ? 3 : 4)
+        // A new track has no message and belongs to the music tab.
+        noteTab = (message?.tab ?? .music, Date() + seconds + Self.noteLinger)
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
     }
 
     /// Clicking a note acts on it (an agent's note brings its terminal forward); otherwise a click opens the notch.
@@ -855,16 +873,16 @@ private struct NotchAlerts: ViewModifier {
                 guard prefs.has(.battery), let old, let new, old != new, let battery = system.battery else { return }
                 let level = Format.percent(battery.level) + "%"
                 if new {
-                    show(NotchMessage(icon: .symbol("bolt.fill"), title: "Charging", detail: level))
+                    show(NotchMessage(icon: .symbol("bolt.fill"), title: "Charging", detail: level, tab: .modules))
                 } else {
                     let left = battery.minutesRemaining.map { " · " + Format.duration(Double($0) * 60) } ?? ""
-                    show(NotchMessage(icon: .symbol("battery.75percent"), title: "On battery", detail: level + left))
+                    show(NotchMessage(icon: .symbol("battery.75percent"), title: "On battery", detail: level + left, tab: .modules))
                 }
             }
             .onChange(of: lowBattery) { old, new in
                 guard prefs.has(.battery), new > old, let battery = system.battery else { return }
                 show(NotchMessage(icon: .symbol("battery.25percent"), title: "Battery low",
-                                  detail: Format.percent(battery.level) + "% left", alert: true))
+                                  detail: Format.percent(battery.level) + "% left", alert: true, tab: .modules))
             }
             .onChange(of: usage.claude.windows.map(\.used)) { old, new in
                 limit("Claude", icon: .asset("claude"), state: usage.claude, old: old, new: new)
@@ -874,7 +892,7 @@ private struct NotchAlerts: ViewModifier {
             }
             .onChange(of: system.thermal) { old, new in
                 guard prefs.has(.heat), new.rawValue >= 2, old.rawValue < 2 else { return }
-                show(NotchMessage(icon: .symbol("thermometer.high"), title: "Running hot", detail: new.name, alert: true))
+                show(NotchMessage(icon: .symbol("thermometer.high"), title: "Running hot", detail: new.name, alert: true, tab: .modules))
             }
     }
 
@@ -890,7 +908,7 @@ private struct NotchAlerts: ViewModifier {
         guard prefs.has(.limits), old.count == new.count else { return }
         for (index, (before, after)) in zip(old, new).enumerated() where [0.8, 0.9].contains(where: { before < $0 && after >= $0 }) {
             let label = state.windows.indices.contains(index) ? state.windows[index].label : ""
-            return show(NotchMessage(icon: icon, title: "\(name) \(label) limit", detail: Format.percent(1 - after) + "% left", alert: true))
+            return show(NotchMessage(icon: icon, title: "\(name) \(label) limit", detail: Format.percent(1 - after) + "% left", alert: true, tab: .ai))
         }
     }
 }
