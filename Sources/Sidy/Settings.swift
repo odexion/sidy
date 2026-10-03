@@ -23,14 +23,24 @@ struct SettingsView: View {
                     }
                 }
                 Spacer()
-                SegmentedPicker(selection: $prefs.settingsPage, options: [(.general, "General"), (.notch, "Notch")])
+                SegmentedPicker(selection: $prefs.settingsPage, options: [(.sidebar, "Sidebar"), (.notch, "Notch")])
             }
             .padding(.bottom, 22)
 
             switch prefs.settingsPage {
-            case .general: general
+            case .sidebar: sidebar
             case .notch: notch
             }
+
+            // Belongs to the app, not to either page, so it stays when both are switched off.
+            settingRow("Launch at login", height: 24) {
+                Toggle("", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, enabled in
+                        try? enabled ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
+                        launchAtLogin = SMAppService.mainApp.status == .enabled
+                    }
+            }
+            .padding(.top, 14)
         }
         .toggleStyle(DotToggleStyle())
         .padding(.horizontal, 22)
@@ -41,97 +51,93 @@ struct SettingsView: View {
         .preferredColorScheme(.dark)
     }
 
-    private var general: some View {
+    /// Each page starts with its switch; the rest of the page only shows while it is on.
+    private var sidebar: some View {
         @Bindable var prefs = prefs
         return VStack(alignment: .leading, spacing: 0) {
-            sectionLabel("01", "Modules", trailing: "\(prefs.visible.count)/\(prefs.order.count) on · drag to reorder")
-            List {
-                ForEach(prefs.order) { module in
-                    moduleRow(module)
-                        .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 2))
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                }
-                .onMove { prefs.order.move(fromOffsets: $0, toOffset: $1) }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .scrollDisabled(true)
-            .environment(\.defaultMinListRowHeight, Self.rowHeight)
-            .frame(height: CGFloat(prefs.order.count) * Self.rowHeight + 12)
-            .panel()
-            .padding(.bottom, 22)
-
-            sectionLabel("02", "Layout")
+            sectionLabel("01", "Sidebar")
             VStack(spacing: 0) {
                 settingRow("Show sidebar") { Toggle("", isOn: $prefs.sidebar) }
                     .help("Off: use Sidy from the notch and the menu bar only")
-                settingRow("Screen edge", enabled: prefs.sidebar) {
-                    SegmentedPicker(selection: $prefs.edge, options: [(.left, "Left"), (.right, "Right")])
-                }
-                settingRow("Detailed style", enabled: prefs.sidebar) { Toggle("", isOn: $prefs.detailed) }
-                settingRow("Show header", enabled: prefs.sidebar && prefs.detailed) { Toggle("", isOn: $prefs.showHeader) }
-                settingRow("Launch at login") {
-                    Toggle("", isOn: $launchAtLogin)
-                        .onChange(of: launchAtLogin) { _, enabled in
-                            try? enabled ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
-                            launchAtLogin = SMAppService.mainApp.status == .enabled
-                        }
+                if prefs.sidebar {
+                    settingRow("Screen edge") {
+                        SegmentedPicker(selection: $prefs.edge, options: [(.left, "Left"), (.right, "Right")])
+                    }
+                    settingRow("Detailed style") { Toggle("", isOn: $prefs.detailed) }
+                    if prefs.detailed {
+                        settingRow("Show header", nested: true) { Toggle("", isOn: $prefs.showHeader) }
+                    }
                 }
             }
             .padding(.vertical, 6)
             .panel()
+
+            if prefs.sidebar {
+                sectionLabel("02", "Modules", trailing: "\(prefs.visible.count)/\(prefs.order.count) on · drag to reorder")
+                    .padding(.top, 22)
+                List {
+                    ForEach(prefs.order) { module in
+                        moduleRow(module)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 2))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                    }
+                    .onMove { prefs.order.move(fromOffsets: $0, toOffset: $1) }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .scrollDisabled(true)
+                .environment(\.defaultMinListRowHeight, Self.rowHeight)
+                .frame(height: CGFloat(prefs.order.count) * Self.rowHeight + 12)
+                .panel()
+            }
         }
     }
 
     private var notch: some View {
         @Bindable var prefs = prefs
         return VStack(alignment: .leading, spacing: 0) {
-            sectionLabel("01", "Notch", trailing: "hover a setting for details")
+            sectionLabel("01", "Notch", trailing: prefs.notch ? "hover a setting for details" : nil)
             VStack(spacing: 0) {
                 settingRow("Show notch", height: Self.notchRowHeight) { Toggle("", isOn: $prefs.notch) }
                     .help("Music, timers and alerts in a panel that grows out of the camera notch")
-                settingRow("Display", enabled: prefs.notch, height: Self.notchRowHeight) {
-                    SegmentedPicker(selection: $prefs.notchDisplay,
-                                    options: [(.notched, "Built-in"), (.main, "Main"), (.all, "All")])
+                if prefs.notch {
+                    settingRow("Display", height: Self.notchRowHeight) {
+                        SegmentedPicker(selection: $prefs.notchDisplay,
+                                        options: [(.notched, "Built-in"), (.main, "Main"), (.all, "All")])
+                    }
+                    .help("Built-in: the display with the notch, or the main one when the lid is closed")
+                    ForEach(NotchFeature.behavior, id: \.self, content: featureRow)
                 }
-                .help("Built-in: the display with the notch, or the main one when the lid is closed")
-                ForEach(NotchFeature.behavior, id: \.self, content: featureRow)
             }
             .padding(.vertical, 6)
             .panel()
-            .padding(.bottom, 22)
 
-            sectionLabel("02", "Gestures", trailing: "two fingers on the notch")
-            VStack(spacing: 0) {
-                ForEach(NotchFeature.gestures, id: \.self, content: featureRow)
-            }
-            .padding(.vertical, 6)
-            .panel()
-            .padding(.bottom, 22)
-
-            sectionLabel("03", "Live activities")
-            VStack(spacing: 0) {
-                ForEach(NotchFeature.activities, id: \.self, content: featureRow)
-            }
-            .padding(.vertical, 6)
-            .panel()
-            .padding(.bottom, 22)
-
-            sectionLabel("04", "AI agents", trailing: "chats in your terminal")
-            VStack(spacing: 0) {
-                ForEach(NotchFeature.agents, id: \.self, content: featureRow)
-            }
-            .padding(.vertical, 6)
-            .panel()
-            if let hookError {
-                Text(hookError).font(Theme.label).foregroundStyle(Theme.accent).padding(.horizontal, 4).padding(.top, 8)
+            if prefs.notch {
+                notchSection("02", "Gestures", trailing: "two fingers on the notch", NotchFeature.gestures)
+                notchSection("03", "Live activities", NotchFeature.activities)
+                notchSection("04", "AI agents", trailing: "chats in your terminal", NotchFeature.agents)
+                if let hookError {
+                    Text(hookError).font(Theme.label).foregroundStyle(Theme.accent).padding(.horizontal, 4).padding(.top, 8)
+                }
             }
         }
     }
 
+    private func notchSection(_ number: String, _ title: String, trailing: String? = nil, _ features: [NotchFeature]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionLabel(number, title, trailing: trailing)
+            VStack(spacing: 0) {
+                ForEach(features, id: \.self, content: featureRow)
+            }
+            .padding(.vertical, 6)
+            .panel()
+        }
+        .padding(.top, 22)
+    }
+
     private func featureRow(_ feature: NotchFeature) -> some View {
-        settingRow(feature.title, enabled: prefs.notch, height: Self.notchRowHeight) {
+        settingRow(feature.title, height: Self.notchRowHeight) {
             Toggle("", isOn: Binding(get: { prefs.notchFeatures.contains(feature) }, set: { _ in toggle(feature) }))
         }
         .help(feature.detail)
@@ -176,17 +182,22 @@ struct SettingsView: View {
         .contentShape(Rectangle())
     }
 
-    private func settingRow(_ title: String, enabled: Bool = true, height: CGFloat = rowHeight,
+    /// `nested` marks a setting that only matters while the one above it is on.
+    private func settingRow(_ title: String, nested: Bool = false, height: CGFloat = rowHeight,
                             @ViewBuilder control: () -> some View) -> some View {
-        HStack {
-            Text(title).font(Theme.body).foregroundStyle(Theme.ink)
+        HStack(spacing: 8) {
+            if nested {
+                Image(systemName: "arrow.turn.down.right")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+            }
+            Text(title).font(Theme.body).foregroundStyle(nested ? Theme.muted : Theme.ink)
             Spacer()
             control()
         }
         .frame(height: height)
-        .padding(.horizontal, 12)
-        .opacity(enabled ? 1 : 0.4)
-        .disabled(!enabled)
+        .padding(.leading, nested ? 18 : 12)
+        .padding(.trailing, 12)
     }
 }
 

@@ -56,6 +56,8 @@ for arg in "$@"; do
         DEST=/Applications
         [ -w "$DEST" ] || DEST=~/Applications
         pkill -x Sidy || true
+        # Opening while the old copy is still quitting fails with error -600.
+        while pgrep -x Sidy >/dev/null; do sleep 0.1; done
         mkdir -p "$DEST"
         rm -rf "$DEST/Sidy.app"
         cp -R "$APP" "$DEST/"

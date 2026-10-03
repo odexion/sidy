@@ -123,30 +123,32 @@ final class NotchController {
         }
     }
 
-    /// A normal window covering a whole display, menu bar included, means an app is full screen there.
-    /// Window bounds can be read without the screen recording permission.
+    /// Hides the panels on displays showing a full-screen space. Matching window bounds can't tell: on a notched
+    /// display a full-screen window stops at the camera housing, and a zoomed one can fill as much.
     private func checkFullScreen() {
-        let windows = prefs.has(.hideInFullScreen)
-            ? CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
-            : []
-        let own = ProcessInfo.processInfo.processIdentifier
-        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        let fullScreen = prefs.has(.hideInFullScreen) ? Self.fullScreenDisplays() : []
         for screen in NSScreen.screens {
             guard let id = screen.displayID, let entry = entries[id] else { continue }
-            // Window bounds have their origin at the top left of the primary display.
-            let bounds = CGRect(x: screen.frame.minX, y: primaryHeight - screen.frame.maxY,
-                                width: screen.frame.width, height: screen.frame.height)
-            let covered = windows.contains { window in
-                guard window[kCGWindowLayer as String] as? Int == 0,
-                      window[kCGWindowOwnerPID as String] as? pid_t != own,
-                      let dictionary = window[kCGWindowBounds as String] as? NSDictionary,
-                      let rect = CGRect(dictionaryRepresentation: dictionary as CFDictionary) else { return false }
-                return rect == bounds
-            }
+            // With one set of spaces across all displays, they're listed as a single "Main" display.
+            let uuid = CGDisplayCreateUUIDFromDisplayID(id).flatMap { CFUUIDCreateString(nil, $0.takeRetainedValue()) as String? }
+            let covered = fullScreen.contains("Main") || uuid.map(fullScreen.contains) == true
             if covered { entry.panel.orderOut(nil) } else { entry.panel.orderFrontRegardless() }
         }
     }
+
+    /// The UUIDs of the displays whose current space is an app's full-screen space (type 4).
+    private static func fullScreenDisplays() -> Set<String> {
+        guard let displays = CGSCopyManagedDisplaySpaces(CGSMainConnectionID()) as? [[String: Any]] else { return [] }
+        return Set(displays.compactMap { display in
+            let space = display["Current Space"] as? [String: Any]
+            return space?["type"] as? Int == 4 ? display["Display Identifier"] as? String : nil
+        })
+    }
 }
+
+/// Private SkyLight calls: macOS has no public way to tell a full-screen space from a desktop.
+@_silgen_name("CGSMainConnectionID") private func CGSMainConnectionID() -> Int32
+@_silgen_name("CGSCopyManagedDisplaySpaces") private func CGSCopyManagedDisplaySpaces(_ connection: Int32) -> CFArray?
 
 // MARK: - View
 

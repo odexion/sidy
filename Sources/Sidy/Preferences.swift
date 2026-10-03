@@ -59,7 +59,7 @@ enum SidebarEdge: String, CaseIterable {
 }
 
 /// The page Settings opens on; the notch's settings button asks for the Notch page.
-enum SettingsPage { case general, notch }
+enum SettingsPage { case sidebar, notch }
 
 /// Which displays get a notch panel.
 enum NotchDisplay: String, CaseIterable {
@@ -143,7 +143,7 @@ final class Preferences {
     }
 
     /// Not saved: Settings shows whichever page was last asked for.
-    var settingsPage = SettingsPage.general
+    var settingsPage = SettingsPage.sidebar
 
     @ObservationIgnored var onLayoutChange: (() -> Void)?
 
