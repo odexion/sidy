@@ -89,7 +89,7 @@ When a player doesn't share its artwork (browsers often drop it), Sidy looks the
 - **Hide a section:** right-click its tile.
 - **Refresh AI usage:** right-click the Claude or Codex tile.
 - **Settings:** click the `•••` under the pill to show or hide sections, reorder them, pick the screen edge, switch to the detailed card grid, or launch Sidy at login.
-- **Notch only:** turn off **Show sidebar** in Settings → General to use Sidy from the notch and the menu bar alone.
+- **Notch only:** turn off **Show sidebar** in Settings → Sidebar to use Sidy from the notch and the menu bar alone.
 - **Menu bar:** the gauge icon opens Settings, shows or hides the sidebar and the notch, refreshes AI usage, replays the opening animation, checks for updates or quits Sidy.
 
 ## Install options
