@@ -5,8 +5,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-VERSION=1.7.0
-BUILD=15
+VERSION=1.7.1
+BUILD=16
 
 swift build -c release --arch arm64 --product Sidy
 swift build -c release --arch arm64 --product MediaBridge
