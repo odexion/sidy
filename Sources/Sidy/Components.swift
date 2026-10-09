@@ -299,12 +299,20 @@ struct DotDisc: View {
 struct DotArtwork: View {
     let art: DotArt
     var grid = 24
+    @Environment(\.displayScale) private var scale
 
     var body: some View {
         Canvas { context, size in
-            let pitch = min(size.width, size.height) / CGFloat(grid)
+            // A dot needs a few physical pixels to stay sharp, so non-Retina screens get a coarser grid,
+            // and each cell spans whole pixels so the dots line up with the screen's pixel grid.
+            let side = min(size.width, size.height) * scale
+            let grid = max(1, min(grid, Int(side / 4)))
+            let pixels = (side / CGFloat(grid)).rounded(.down)
+            let pitch = pixels / scale
+            let inset = ((side - pixels * CGFloat(grid)) / 2).rounded(.down) / scale
             for (index, color) in art.colors(grid).enumerated() {
-                let center = CGPoint(x: (CGFloat(index % grid) + 0.5) * pitch, y: (CGFloat(index / grid) + 0.5) * pitch)
+                let center = CGPoint(x: inset + (CGFloat(index % grid) + 0.5) * pitch,
+                                     y: inset + (CGFloat(index / grid) + 0.5) * pitch)
                 let luma = 0.3 * color.x + 0.59 * color.y + 0.11 * color.z
                 context.fill(dot(center, pitch * (0.26 + 0.16 * luma)), with: .color(Color(red: color.x, green: color.y, blue: color.z)))
             }
