@@ -281,8 +281,8 @@ struct NotchView: View {
 
     /// A track is loaded, playing or paused.
     private var playing: Bool { media.title != nil }
-    private var timing: Bool { prefs.has(.clocks) && clocks.timerActive }
-    private var ringing: Clocks.Ringing? { prefs.has(.clocks) ? clocks.ringing : nil }
+    private var timing: Bool { prefs.has(.countdown) && clocks.timerActive }
+    private var ringing: Clocks.Ringing? { prefs.has(.ringing) ? clocks.ringing : nil }
     /// An agent is busy and nothing else needs the closed notch's sides.
     private var agentWorking: AgentSession? {
         guard let session = agents.working, prefs.has(session.agent.feature) else { return nil }
@@ -884,7 +884,7 @@ private struct NotchAlerts: ViewModifier {
                 }
             }
             .onChange(of: lowBattery) { old, new in
-                guard prefs.has(.battery), new > old, let battery = system.battery else { return }
+                guard prefs.has(.lowBattery), new > old, let battery = system.battery else { return }
                 show(NotchMessage(icon: .symbol("battery.25percent"), title: "Battery low",
                                   detail: Format.percent(battery.level) + "% left", alert: true, tab: .modules))
             }

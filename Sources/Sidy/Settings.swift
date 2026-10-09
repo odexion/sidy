@@ -1,152 +1,318 @@
 import ServiceManagement
 import SwiftUI
 
+/// A narrow column of pages on the left and the chosen page on the right, so each page stays short enough to read.
 struct SettingsView: View {
-    static let width: CGFloat = 340
+    static let size = CGSize(width: 680, height: 600)
+    private static let navWidth: CGFloat = 196
     private static let rowHeight: CGFloat = 34
 
     @Environment(Preferences.self) private var prefs
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var hookError: String?
-    /// The Notch page has more rows; slightly shorter ones keep it on a 13-inch screen.
-    private static let notchRowHeight: CGFloat = 30
 
     var body: some View {
+        HStack(spacing: 0) {
+            navigation
+            Rectangle().fill(.white.opacity(0.06)).frame(width: 1)
+            page
+        }
+        .toggleStyle(DotToggleStyle())
+        .frame(width: Self.size.width, height: Self.size.height)
+        .background(Color(white: 0.055))
+        .preferredColorScheme(.dark)
+    }
+
+    // MARK: Navigation
+
+    private var navigation: some View {
         @Bindable var prefs = prefs
         return VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .bottom) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("SIDY").font(Theme.display(30)).kerning(3).foregroundStyle(Theme.ink)
-                    HStack(spacing: 6) {
-                        Circle().fill(Theme.accent).frame(width: 5, height: 5)
-                        Text("Settings").font(Theme.label).foregroundStyle(Theme.muted)
-                    }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("SIDY").font(Theme.display(30)).kerning(3).foregroundStyle(Theme.ink)
+                HStack(spacing: 6) {
+                    Circle().fill(Theme.accent).frame(width: 5, height: 5)
+                    Text("Settings").font(Theme.label).foregroundStyle(Theme.muted)
                 }
+            }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 26)
+
+            VStack(spacing: 12) {
+                navGroup("Sidebar", isOn: $prefs.sidebar, pages: SettingsPage.sidebarPages)
+                navGroup("Notch", isOn: $prefs.notch, pages: SettingsPage.notchPages)
+            }
+
+            Spacer()
+
+            navItem(.general).padding(.horizontal, 6).padding(.bottom, 14)
+
+            Text("VERSION \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "DEV")")
+                .font(Theme.label)
+                .foregroundStyle(Theme.muted.opacity(0.6))
+                .padding(.horizontal, 10)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 52)
+        .padding(.bottom, 20)
+        .frame(width: Self.navWidth, alignment: .leading)
+        .frame(maxHeight: .infinity)
+        .background(Color(white: 0.035))
+    }
+
+    /// The sidebar and the notch each get a framed group, headed by the switch that turns them on.
+    private func navGroup(_ title: String, isOn: Binding<Bool>, pages: [SettingsPage]) -> some View {
+        VStack(spacing: 2) {
+            HStack(spacing: 6) {
+                Circle().fill(isOn.wrappedValue ? Theme.accent : Theme.muted.opacity(0.5)).frame(width: 5, height: 5)
+                Text(title.uppercased()).font(Theme.label).foregroundStyle(isOn.wrappedValue ? Theme.ink : Theme.muted)
                 Spacer()
-                SegmentedPicker(selection: $prefs.settingsPage, options: [(.sidebar, "Sidebar"), (.notch, "Notch")])
+                Toggle("", isOn: isOn)
             }
-            .padding(.bottom, 22)
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            ForEach(pages, id: \.self) { navItem($0).opacity(isOn.wrappedValue ? 1 : 0.5) }
+        }
+        .padding(6)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.white.opacity(0.03))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.white.opacity(0.06), lineWidth: 0.6))
+        )
+    }
 
-            switch prefs.settingsPage {
-            case .sidebar: sidebar
-            case .notch: notch
+    private func navItem(_ page: SettingsPage) -> some View {
+        let selected = prefs.settingsPage == page
+        return HStack(spacing: 10) {
+            Image(systemName: page.icon)
+                .font(.system(size: 11, weight: .medium))
+                .frame(width: 16)
+                .foregroundStyle(selected ? Theme.accent : Theme.muted)
+            Text(page.title).font(Theme.body).foregroundStyle(selected ? Theme.ink : Theme.muted)
+            Spacer()
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 30)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.white.opacity(selected ? 0.07 : 0)))
+        .contentShape(Rectangle())
+        .onTapGesture { prefs.settingsPage = page }
+    }
+
+    /// The switch a page's group hangs on: the sidebar's or the notch's.
+    private func groupSwitch(_ page: SettingsPage) -> Binding<Bool>? {
+        @Bindable var prefs = prefs
+        if SettingsPage.sidebarPages.contains(page) { return $prefs.sidebar }
+        if SettingsPage.notchPages.contains(page) { return $prefs.notch }
+        return nil
+    }
+
+    /// A page whose sidebar or notch is switched off. Modules stay editable: the notch's modules tab uses them too.
+    private func pageOff(_ page: SettingsPage) -> Bool {
+        switch page {
+        case .sidebar: !prefs.sidebar
+        case .notch, .tabs, .gestures, .activities, .agents: !prefs.notch
+        case .modules, .general: false
+        }
+    }
+
+    // MARK: Pages
+
+    @ViewBuilder
+    private var page: some View {
+        let current = prefs.settingsPage
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                if let group = current.group {
+                    Text(group.uppercased()).font(Theme.label).foregroundStyle(Theme.accent)
+                }
+                Text(current.title).font(.system(size: 20, weight: .semibold, design: .monospaced)).foregroundStyle(Theme.ink)
+                Text(current.subtitle).font(Theme.body).foregroundStyle(Theme.muted)
+            }
+            .padding(.horizontal, 4)
+            .padding(.bottom, 20)
+
+            if pageOff(current), let group = current.group, let isOn = groupSwitch(current) {
+                offNotice(group, isOn: isOn)
             }
 
-            // Belongs to the app, not to either page, so it stays when both are switched off.
-            settingRow("Launch at login", height: 24) {
+            if current == .modules {
+                // The list scrolls and reorders on its own.
+                modules
+            } else {
+                ScrollView {
+                    content(for: current).padding(.bottom, 24)
+                }
+                .scrollIndicators(.never)
+                .dimmed(pageOff(current))
+            }
+        }
+        .padding(.horizontal, 28)
+        .padding(.top, 48)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private func content(for page: SettingsPage) -> some View {
+        switch page {
+        case .sidebar: sidebar
+        case .modules: EmptyView()
+        case .notch: notch
+        case .tabs: tabs
+        case .gestures: featureSection("On the notch", NotchFeature.gestures)
+        case .activities: activities
+        case .agents: agents
+        case .general: general
+        }
+    }
+
+    private var sidebar: some View {
+        @Bindable var prefs = prefs
+        return VStack(alignment: .leading, spacing: 22) {
+            section("Placement") {
+                row("Screen edge", "The side of the screen the sidebar sits on") {
+                    SegmentedPicker(selection: $prefs.edge, options: [(.left, "Left"), (.right, "Right")])
+                }
+                divider
+                row("Auto-hide", "Tucks it off the edge, like the Dock. Push the pointer against the edge to bring it back") {
+                    Toggle("", isOn: $prefs.autoHide)
+                }
+            }
+            section("Look") {
+                if glassAvailable {
+                    row("Liquid glass", "Glass in place of the dark pill and cards") { Toggle("", isOn: $prefs.glass) }
+                    divider
+                }
+                row("Detailed style", "Every module as a full card instead of the slim pill") { Toggle("", isOn: $prefs.detailed) }
+                if prefs.detailed {
+                    divider
+                    row("Show header", "The SIDY title above the cards", nested: true) { Toggle("", isOn: $prefs.showHeader) }
+                }
+            }
+        }
+    }
+
+    private var modules: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionLabel("\(prefs.visible.count) of \(prefs.order.count) on", trailing: "drag to reorder")
+            List {
+                ForEach(prefs.order) { module in
+                    moduleRow(module)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 2))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                }
+                .onMove { prefs.order.move(fromOffsets: $0, toOffset: $1) }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .scrollIndicators(.never)
+            .environment(\.defaultMinListRowHeight, Self.rowHeight)
+            .padding(.vertical, 6)
+            .panel()
+            .padding(.bottom, 24)
+        }
+    }
+
+    private var notch: some View {
+        @Bindable var prefs = prefs
+        return VStack(alignment: .leading, spacing: 22) {
+            section("Display") {
+                row("Display", "Built-in uses the main display while the lid is closed") {
+                    SegmentedPicker(selection: $prefs.notchDisplay, options: [(.notched, "Built-in"), (.main, "Main"), (.all, "All")])
+                }
+            }
+            featureSection("Opening", NotchFeature.behavior)
+        }
+    }
+
+    /// Music is the notch's home and always there; the other tabs join it as icons beside the camera.
+    private var tabs: some View {
+        section("In the open notch", trailing: "icons beside the camera") {
+            row("Music", "The player, where the notch opens. Always there") {
+                Text("ALWAYS").font(Theme.label).foregroundStyle(Theme.muted)
+            }
+            ForEach(NotchFeature.tabs, id: \.self) { feature in
+                divider
+                featureRow(feature)
+            }
+        }
+    }
+
+    private var agents: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            featureSection("Agents", NotchFeature.agents, trailing: "chats in your terminal")
+            if let hookError {
+                Text(hookError).font(Theme.body).foregroundStyle(Theme.accent).padding(.horizontal, 4)
+            }
+        }
+    }
+
+    /// Every alert the notch drops down with. Agent replies come with their agent's switch, so they link there.
+    private var activities: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            featureSection("Music & clocks", NotchFeature.musicAndClocks)
+            featureSection("Mac", NotchFeature.system)
+            section("AI") {
+                featureRow(.limits)
+                divider
+                row("Agent replies", "When Claude Code or Codex finishes or needs you. Comes with each agent's switch") {
+                    Text("AI AGENTS ›")
+                        .font(Theme.label)
+                        .foregroundStyle(Theme.accent)
+                        .contentShape(Rectangle())
+                        .onTapGesture { prefs.settingsPage = .agents }
+                }
+            }
+        }
+    }
+
+    private var general: some View {
+        group {
+            row("Launch at login", "Opens Sidy when you log in to your Mac") {
                 Toggle("", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, enabled in
                         try? enabled ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
                         launchAtLogin = SMAppService.mainApp.status == .enabled
                     }
             }
-            .padding(.top, 14)
-        }
-        .toggleStyle(DotToggleStyle())
-        .padding(.horizontal, 22)
-        .padding(.top, 36)
-        .padding(.bottom, 22)
-        .frame(width: Self.width)
-        .background(Color(white: 0.055))
-        .preferredColorScheme(.dark)
-    }
-
-    /// Each page starts with its switch; the rest of the page only shows while it is on.
-    private var sidebar: some View {
-        @Bindable var prefs = prefs
-        return VStack(alignment: .leading, spacing: 0) {
-            sectionLabel("01", "Sidebar")
-            VStack(spacing: 0) {
-                settingRow("Show sidebar") { Toggle("", isOn: $prefs.sidebar) }
-                    .help("Off: use Sidy from the notch and the menu bar only")
-                if prefs.sidebar {
-                    settingRow("Screen edge") {
-                        SegmentedPicker(selection: $prefs.edge, options: [(.left, "Left"), (.right, "Right")])
-                    }
-                    settingRow("Auto-hide") { Toggle("", isOn: $prefs.autoHide) }
-                        .help("Tucks the sidebar off the screen edge; push the pointer against that edge to slide it back in")
-                    if glassAvailable {
-                        settingRow("Liquid glass") { Toggle("", isOn: $prefs.glass) }
-                            .help("Glass in place of the dark pill and cards")
-                    }
-                    settingRow("Detailed style") { Toggle("", isOn: $prefs.detailed) }
-                    if prefs.detailed {
-                        settingRow("Show header", nested: true) { Toggle("", isOn: $prefs.showHeader) }
-                    }
-                }
-            }
-            .padding(.vertical, 6)
-            .panel()
-
-            if prefs.sidebar {
-                sectionLabel("02", "Modules", trailing: "\(prefs.visible.count)/\(prefs.order.count) on · drag to reorder")
-                    .padding(.top, 22)
-                List {
-                    ForEach(prefs.order) { module in
-                        moduleRow(module)
-                            .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 2))
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
-                    }
-                    .onMove { prefs.order.move(fromOffsets: $0, toOffset: $1) }
-                }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .scrollDisabled(true)
-                .environment(\.defaultMinListRowHeight, Self.rowHeight)
-                .frame(height: CGFloat(prefs.order.count) * Self.rowHeight + 12)
-                .panel()
+            divider
+            row("Quit Sidy", "Closes the sidebar, the notch and the menu bar icon until you open Sidy again") {
+                pillButton("Quit") { NSApp.terminate(nil) }
             }
         }
     }
 
-    private var notch: some View {
-        @Bindable var prefs = prefs
-        return VStack(alignment: .leading, spacing: 0) {
-            sectionLabel("01", "Notch", trailing: prefs.notch ? "hover a setting for details" : nil)
-            VStack(spacing: 0) {
-                settingRow("Show notch", height: Self.notchRowHeight) { Toggle("", isOn: $prefs.notch) }
-                    .help("Music, timers and alerts in a panel that grows out of the camera notch")
-                if prefs.notch {
-                    settingRow("Display", height: Self.notchRowHeight) {
-                        SegmentedPicker(selection: $prefs.notchDisplay,
-                                        options: [(.notched, "Built-in"), (.main, "Main"), (.all, "All")])
-                    }
-                    .help("Built-in: the display with the notch, or the main one when the lid is closed")
-                    ForEach(NotchFeature.behavior, id: \.self, content: featureRow)
-                }
-            }
-            .padding(.vertical, 6)
-            .panel()
+    // MARK: Pieces
 
-            if prefs.notch {
-                notchSection("02", "Gestures", trailing: "two fingers on the notch", NotchFeature.gestures)
-                notchSection("03", "Live activities", NotchFeature.activities)
-                notchSection("04", "AI agents", trailing: "chats in your terminal", NotchFeature.agents)
-                if let hookError {
-                    Text(hookError).font(Theme.label).foregroundStyle(Theme.accent).padding(.horizontal, 4).padding(.top, 8)
-                }
+    private func featureSection(_ title: String, _ features: [NotchFeature], trailing: String? = nil) -> some View {
+        section(title, trailing: trailing) {
+            ForEach(Array(features.enumerated()), id: \.element) { index, feature in
+                if index > 0 { divider }
+                featureRow(feature)
             }
         }
-    }
-
-    private func notchSection(_ number: String, _ title: String, trailing: String? = nil, _ features: [NotchFeature]) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionLabel(number, title, trailing: trailing)
-            VStack(spacing: 0) {
-                ForEach(features, id: \.self, content: featureRow)
-            }
-            .padding(.vertical, 6)
-            .panel()
-        }
-        .padding(.top, 22)
     }
 
     private func featureRow(_ feature: NotchFeature) -> some View {
-        settingRow(feature.title, height: Self.notchRowHeight) {
+        row(feature.title, feature.detail) {
             Toggle("", isOn: Binding(get: { prefs.notchFeatures.contains(feature) }, set: { _ in toggle(feature) }))
         }
-        .help(feature.detail)
+    }
+
+    /// Says why the page is faded, with a shortcut to the switch in the list.
+    private func offNotice(_ group: String, isOn: Binding<Bool>) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "power").font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.accent)
+            Text("The \(group.lowercased()) is off").font(Theme.body).foregroundStyle(Theme.ink)
+            Spacer()
+            pillButton("Turn on") {
+                withAnimation(.easeOut(duration: 0.15)) { isOn.wrappedValue = true }
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 40)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.accent.opacity(0.1)))
+        .padding(.bottom, 18)
     }
 
     /// Agent switches also add or remove Sidy's hooks; if that fails the switch goes back and says why.
@@ -157,9 +323,37 @@ struct SettingsView: View {
         if hookError != nil { prefs.toggle(feature) }
     }
 
-    private func sectionLabel(_ number: String, _ title: String, trailing: String? = nil) -> some View {
+    private func pillButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Text(title.uppercased())
+            .font(Theme.label)
+            .foregroundStyle(.black)
+            .padding(.horizontal, 10)
+            .frame(height: 20)
+            .background(Capsule().fill(Theme.ink))
+            .contentShape(Capsule())
+            .onTapGesture(perform: action)
+    }
+
+    private func section(_ title: String, trailing: String? = nil, @ViewBuilder rows: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionLabel(title, trailing: trailing)
+            group(rows: rows)
+        }
+    }
+
+    private func group(@ViewBuilder rows: () -> some View) -> some View {
+        VStack(spacing: 0) { rows() }
+            .padding(.vertical, 4)
+            .panel()
+    }
+
+    private var divider: some View {
+        Rectangle().fill(.white.opacity(0.05)).frame(height: 1).padding(.horizontal, 14)
+    }
+
+    private func sectionLabel(_ title: String, trailing: String? = nil) -> some View {
         HStack(spacing: 6) {
-            Text(number).foregroundStyle(Theme.ink)
+            Circle().fill(Theme.accent).frame(width: 4, height: 4)
             Text(title.uppercased()).foregroundStyle(Theme.muted)
             Spacer()
             if let trailing { Text(trailing.uppercased()).foregroundStyle(Theme.muted.opacity(0.7)) }
@@ -188,26 +382,37 @@ struct SettingsView: View {
         .contentShape(Rectangle())
     }
 
-    /// `nested` marks a setting that only matters while the one above it is on.
-    private func settingRow(_ title: String, nested: Bool = false, height: CGFloat = rowHeight,
-                            @ViewBuilder control: () -> some View) -> some View {
-        HStack(spacing: 8) {
+    /// A setting with its explanation under it. `nested` marks one that only matters while the one above it is on.
+    private func row(_ title: String, _ detail: String, nested: Bool = false,
+                     @ViewBuilder control: () -> some View) -> some View {
+        HStack(spacing: 14) {
             if nested {
                 Image(systemName: "arrow.turn.down.right")
                     .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(Theme.muted)
             }
-            Text(title).font(Theme.body).foregroundStyle(nested ? Theme.muted : Theme.ink)
-            Spacer()
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(Theme.body).foregroundStyle(Theme.ink)
+                Text(detail)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
             control()
         }
-        .frame(height: height)
-        .padding(.leading, nested ? 18 : 12)
-        .padding(.trailing, 12)
+        .padding(.vertical, 11)
+        .padding(.leading, nested ? 18 : 14)
+        .padding(.trailing, 14)
     }
 }
 
 private extension View {
+    /// Faded and out of reach while the switch it depends on is off.
+    func dimmed(_ off: Bool) -> some View {
+        opacity(off ? 0.4 : 1).disabled(off)
+    }
+
     /// The widget's card look, reused for settings groups.
     func panel() -> some View {
         background(

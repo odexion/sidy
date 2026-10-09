@@ -62,6 +62,8 @@ struct CompactBar: View {
                             }
                             Button("Hide \(module.title)") { prefs.toggle(module) }
                             Button("Settings…", action: openSettings)
+                            Divider()
+                            Button("Quit Sidy") { NSApp.terminate(nil) }
                         }
                 }
                 if docked { settingsDots(after: modules.count) }

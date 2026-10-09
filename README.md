@@ -27,9 +27,9 @@ curl -fsSL https://raw.githubusercontent.com/odexion/sidy/main/scripts/install.s
 
 Sidy sits on the edge of your desktop as a slim pill of gauges. Hover a tile to see its detailed card, or click the tile to pin the card open.
 
-Turn on **Auto-hide** in Settings → Sidebar to keep it tucked off the screen edge, like the Dock: push the pointer against that edge and it slides out over your windows, then slips away again when you move off it.
+Turn on **Auto-hide** in Settings → Sidebar → Appearance to keep it tucked off the screen edge, like the Dock: push the pointer against that edge and it slides out over your windows, then slips away again when you move off it.
 
-On macOS 26 and later, **Liquid glass** in Settings → Sidebar swaps the dark pill and cards for glass.
+On macOS 26 and later, **Liquid glass** in Settings → Sidebar → Appearance swaps the dark pill and cards for glass.
 
 ## What it shows
 
@@ -79,11 +79,11 @@ It also shows:
 - A running timer counting down beside the notch. A ringing timer or alarm drops down with Stop.
 - Short alerts for plugging in, unplugging and low battery, for a Claude or Codex limit dropping under 20% and 10%, and for the Mac running hot.
 
-**AI agents:** turn on **Claude Code** or **Codex** under Settings → Notch → AI agents, and the notch tells you when a reply in your terminal finishes or the agent needs your permission. It shows the project and the start of the reply; click it to bring the terminal forward. The AI tab lists your sessions as tiles, colored by state (running, needs you, done or stopped), and shows your Claude and Codex limits when none are running. Codex asks you to approve new hooks once with `/hooks`. Turning a switch on adds Sidy's hooks to `~/.claude/settings.json` or `~/.codex/hooks.json`, next to any you already have. Turning it off removes them again, and the file's original is kept once as `.sidy-backup`.
+**AI agents:** turn on **Claude Code** or **Codex** under Settings → AI agents, and the notch tells you when a reply in your terminal finishes or the agent needs your permission. It shows the project and the start of the reply; click it to bring the terminal forward. The AI tab lists your sessions as tiles, colored by state (running, needs you, done or stopped), and shows your Claude and Codex limits when none are running. Codex asks you to approve new hooks once with `/hooks`. Turning a switch on adds Sidy's hooks to `~/.claude/settings.json` or `~/.codex/hooks.json`, next to any you already have. Turning it off removes them again, and the file's original is kept once as `.sidy-backup`.
 
 Gestures work with two fingers on the notch. Swipe down to open and up to close. Swipe sideways to change tracks, and scroll for volume, on the closed notch or the music tab.
 
-Every part can be switched on or off in Settings → Notch, and hovering a setting explains it. Scroll-for-volume, the modules and AI tabs, and the Claude Code and Codex alerts start off. By default the notch sits on the built-in display, or the main one when the lid is closed, and hides while an app is full screen. On displays without a notch, it hangs from the middle of the menu bar.
+Every part can be switched on or off in the Notch group of Settings, across its Behavior, Tabs, Gestures, Activities and AI agents pages, with each setting explained under its name. Scroll-for-volume, the modules and AI tabs, and the Claude Code and Codex alerts start off. By default the notch sits on the built-in display, or the main one when the lid is closed, and hides while an app is full screen. On displays without a notch, it hangs from the middle of the menu bar.
 
 When a player doesn't share its artwork (browsers often drop it), Sidy looks the track up in the iTunes catalog, sending the title and artist to Apple.
 
@@ -93,7 +93,7 @@ When a player doesn't share its artwork (browsers often drop it), Sidy looks the
 - **Hide a section:** right-click its tile.
 - **Refresh AI usage:** right-click the Claude or Codex tile.
 - **Settings:** click the `•••` under the pill to show or hide sections, reorder them, pick the screen edge, switch to the detailed card grid, or launch Sidy at login.
-- **Notch only:** turn off **Show sidebar** in Settings → Sidebar to use Sidy from the notch and the menu bar alone.
+- **Notch only:** turn off the **Sidebar** switch in Settings to use Sidy from the notch and the menu bar alone.
 - **Menu bar:** the gauge icon opens Settings, shows or hides the sidebar and the notch, refreshes AI usage, replays the opening animation, checks for updates or quits Sidy.
 
 ## Install options

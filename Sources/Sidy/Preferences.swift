@@ -59,7 +59,60 @@ enum SidebarEdge: String, CaseIterable {
 }
 
 /// The page Settings opens on; the notch's settings button asks for the Notch page.
-enum SettingsPage { case sidebar, notch }
+enum SettingsPage: CaseIterable {
+    case sidebar, modules, notch, tabs, gestures, activities, agents, general
+
+    static let sidebarPages: [SettingsPage] = [.sidebar, .modules]
+    static let notchPages: [SettingsPage] = [.notch, .tabs, .gestures, .activities, .agents]
+
+    /// The part of Sidy a page belongs to, shown above its title.
+    var group: String? {
+        switch self {
+        case .sidebar, .modules: "Sidebar"
+        case .notch, .tabs, .gestures, .activities, .agents: "Notch"
+        case .general: nil
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .sidebar: "Appearance"
+        case .modules: "Modules"
+        case .notch: "Behavior"
+        case .tabs: "Tabs"
+        case .gestures: "Gestures"
+        case .activities: "Activities"
+        case .agents: "AI agents"
+        case .general: "General"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .sidebar: "The pill of gauges on the edge of your desktop"
+        case .modules: "What the sidebar and the notch's modules tab show"
+        case .notch: "Where the notch shows up and how it opens"
+        case .tabs: "The pages of the open notch"
+        case .gestures: "Two fingers on the notch"
+        case .activities: "What drops down from the notch on its own"
+        case .agents: "Claude Code and Codex sessions in the notch"
+        case .general: "Sidy itself"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .sidebar: "paintbrush"
+        case .modules: "square.grid.2x2"
+        case .notch: "cursorarrow.motionlines"
+        case .tabs: "rectangle.split.3x1"
+        case .gestures: "hand.draw"
+        case .activities: "bell"
+        case .agents: "sparkles"
+        case .general: "gearshape"
+        }
+    }
+}
 
 /// Which displays get a notch panel.
 enum NotchDisplay: String, CaseIterable {
@@ -72,6 +125,7 @@ enum NotchFeature: String, CaseIterable {
     case swipeTracks, swipeOpen, scrollVolume
     case trackPeek, clocks, battery, limits, heat, usageTab, modulesTab
     case claudeCode, codex
+    case countdown, ringing, lowBattery
 
     /// Off until turned on in Settings. The agents' hooks edit their settings files, so they wait to be asked;
     /// the modules and AI tabs are extras beyond the music the notch is for.
@@ -79,8 +133,14 @@ enum NotchFeature: String, CaseIterable {
 
     static let behavior: [NotchFeature] = [.hover, .haptics, .hideInFullScreen]
     static let gestures: [NotchFeature] = [.swipeTracks, .swipeOpen, .scrollVolume]
-    static let activities: [NotchFeature] = [.trackPeek, .modulesTab, .clocks, .battery, .heat]
-    static let agents: [NotchFeature] = [.claudeCode, .codex, .usageTab, .limits]
+    /// The open notch's tabs beside the music player, which is always there.
+    static let tabs: [NotchFeature] = [.modulesTab, .clocks, .usageTab]
+    static let musicAndClocks: [NotchFeature] = [.trackPeek, .countdown, .ringing]
+    static let system: [NotchFeature] = [.battery, .lowBattery, .heat]
+    static let agents: [NotchFeature] = [.claudeCode, .codex]
+
+    /// Alerts split off an older switch; on a Mac that already had that switch, they start the way it was.
+    static let splitFrom: [NotchFeature: NotchFeature] = [.countdown: .clocks, .ringing: .clocks, .lowBattery: .battery]
 
     var title: String {
         switch self {
@@ -92,7 +152,10 @@ enum NotchFeature: String, CaseIterable {
         case .scrollVolume: "Scroll for volume"
         case .trackPeek: "Show new tracks"
         case .clocks: "Timer & alarm"
-        case .battery: "Battery & charging"
+        case .countdown: "Timer countdown"
+        case .ringing: "Timer & alarm ringing"
+        case .battery: "Charging"
+        case .lowBattery: "Low battery"
         case .limits: "AI limit warnings"
         case .heat: "Heat warnings"
         case .usageTab: "AI tab"
@@ -112,8 +175,11 @@ enum NotchFeature: String, CaseIterable {
         case .swipeOpen: "Two-finger swipe down on the notch opens it, up closes it"
         case .scrollVolume: "Two-finger scroll up and down on the music tab changes the volume"
         case .trackPeek: "The title peeks out under the notch when the track changes"
-        case .clocks: "A Timer tab with the timer and alarm controls, a countdown beside the notch, and Stop when one rings"
-        case .battery: "Plugging in, unplugging and low battery"
+        case .clocks: "A tab with the timer and alarm controls"
+        case .countdown: "The time left beside the notch while a timer runs"
+        case .ringing: "Drops down with Stop when a timer or alarm goes off"
+        case .battery: "Plugging in and unplugging"
+        case .lowBattery: "When the battery drops under 20% and again under 10%"
         case .limits: "When a Claude or Codex limit drops under 20% or 10%"
         case .heat: "When the Mac starts running hot"
         case .modulesTab: "Your sidebar's gauges (CPU, GPU, memory and the rest) in a tab of the open notch"
@@ -170,7 +236,11 @@ final class Preferences {
         // Like modules: features this Mac hasn't seen yet start with their default.
         let seen = Set((defaults.stringArray(forKey: "notch.seen") ?? []).compactMap(NotchFeature.init))
         let enabled = Set((defaults.stringArray(forKey: "notch.features") ?? []).compactMap(NotchFeature.init))
-        notchFeatures = enabled.union(NotchFeature.allCases.filter { !seen.contains($0) && !NotchFeature.optIn.contains($0) })
+        notchFeatures = enabled.union(NotchFeature.allCases.filter { feature in
+            guard !seen.contains(feature) else { return false }
+            if let parent = NotchFeature.splitFrom[feature], seen.contains(parent) { return enabled.contains(parent) }
+            return !NotchFeature.optIn.contains(feature)
+        })
         defaults.set(NotchFeature.allCases.map(\.rawValue), forKey: "notch.seen")
         defaults.set(notchFeatures.map(\.rawValue), forKey: "notch.features")
         defaults.set(order.map(\.rawValue), forKey: "order")

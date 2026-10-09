@@ -47,6 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ note: Notification) {
         registerFont()
+        NSApp.mainMenu = Self.mainMenu()
 
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "--snapshot"), i + 1 < args.count {
@@ -187,9 +188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func openSettings() {
         if settingsWindow == nil {
             let hosting = NSHostingView(rootView: SettingsView().environment(prefs))
-            // The General and Notch pages differ in height; the window follows whichever is showing.
-            hosting.sizingOptions = [.minSize, .intrinsicContentSize, .maxSize]
-            let window = NSWindow(contentRect: NSRect(origin: .zero, size: hosting.fittingSize),
+            let window = NSWindow(contentRect: NSRect(origin: .zero, size: SettingsView.size),
                                   styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
             window.title = "Sidy"
             window.titleVisibility = .hidden
@@ -207,6 +206,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func refreshUsage() { usage.refresh() }
+
+    /// Never shown, since Sidy lives in the menu bar, but it gives the Settings window ⌘Q and ⌘W.
+    private static func mainMenu() -> NSMenu {
+        let app = NSMenu()
+        app.addItem(withTitle: "Quit Sidy", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let window = NSMenu(title: "Window")
+        window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        let menu = NSMenu()
+        for submenu in [app, window] {
+            let item = NSMenuItem()
+            item.submenu = submenu
+            menu.addItem(item)
+        }
+        return menu
+    }
 
     /// A fresh hosting view starts the sidebar over, folded up, so the opening animation plays again.
     @objc func replayAnimation() { panel.contentView = NSHostingView(rootView: sidebar()) }
