@@ -62,6 +62,30 @@ struct Badge {
     var color: Color = Theme.accent
 }
 
+extension EnvironmentValues {
+    /// Liquid glass in place of the dark fills, when turned on in Settings. Only the sidebar sets it.
+    @Entry var glass = false
+}
+
+/// Liquid glass needs macOS 26; earlier systems keep the dark look whatever the setting says.
+var glassAvailable: Bool {
+    if #available(macOS 26, *) { true } else { false }
+}
+
+extension View {
+    /// A sidebar surface in `shape`: liquid glass when `glass` is on, otherwise `solid`.
+    @ViewBuilder
+    func surface(_ shape: some Shape, glass: Bool, @ViewBuilder solid: () -> some View) -> some View {
+        if glass, #available(macOS 26, *) {
+            // Dark glass, so the light ink stays readable over a bright desktop.
+            self.glassEffect(.regular.tint(.black.opacity(0.25)), in: shape)
+                .environment(\.colorScheme, .dark)
+        } else {
+            self.background(solid())
+        }
+    }
+}
+
 struct Card<Content: View>: View {
     static var size: CGSize { CGSize(width: 184, height: 128) }
 
@@ -69,6 +93,7 @@ struct Card<Content: View>: View {
     let title: String
     var badge: Badge?
     @ViewBuilder var content: Content
+    @Environment(\.glass) private var glass
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -90,7 +115,7 @@ struct Card<Content: View>: View {
         }
         .padding(12)
         .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
-        .background(
+        .surface(RoundedRectangle(cornerRadius: 14, style: .continuous), glass: glass) {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(LinearGradient(colors: [Color(white: 0.145), Color(white: 0.095)], startPoint: .top, endPoint: .bottom))
                 .overlay(
@@ -98,7 +123,7 @@ struct Card<Content: View>: View {
                         .strokeBorder(LinearGradient(colors: [.white.opacity(0.12), .white.opacity(0.03)], startPoint: .top, endPoint: .bottom), lineWidth: 0.6)
                 )
                 .shadow(color: .black.opacity(0.45), radius: 10, y: 6)
-        )
+        }
     }
 }
 

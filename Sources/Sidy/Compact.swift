@@ -7,7 +7,9 @@ struct CompactBar: View {
     @Environment(Clocks.self) private var clocks
     @Environment(Notes.self) private var notes
     @Environment(AIUsage.self) private var usage
+    @Environment(AutoHide.self) private var autoHide
     @Environment(\.revealed) private var revealed
+    @Environment(\.glass) private var glass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var hovered: Module?
@@ -18,6 +20,11 @@ struct CompactBar: View {
     private static let gap: CGFloat = 12
     private static let spacing: CGFloat = 6
     private static var pitch: CGFloat { ModuleTile.height + spacing }
+    /// How far the docked pill's shoulders curve out along the screen edge.
+    private static let shoulder: CGFloat = 12
+
+    /// With auto-hide, the pill hangs off the screen edge like the notch, settings dots and all.
+    private var docked: Bool { prefs.autoHide }
 
     init(openSettings: @escaping () -> Void, pinned: Module? = nil) {
         self.openSettings = openSettings
@@ -57,13 +64,13 @@ struct CompactBar: View {
                             Button("Settings…", action: openSettings)
                         }
                 }
+                if docked { settingsDots(after: modules.count) }
             }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 8)
+            .padding(.vertical, docked ? 12 + Self.shoulder : 12)
+            .padding(.horizontal, docked ? 4 : 8)
             .background(pill)
 
-            SettingsDots(action: openSettings)
-                .reveal(rank: modules.count / 2 + 1, delay: 0.8, scale: 0.8)
+            if !docked { settingsDots(after: modules.count) }
         }
         .overlayPreferenceValue(TileBounds.self) { bounds in
             GeometryReader { proxy in
@@ -80,6 +87,14 @@ struct CompactBar: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: shown)
+        // A hovered card sits beside the pill; auto-hide waits until the pointer leaves it too.
+        .onChange(of: hovered) { _, module in autoHide.overCard = module != nil }
+    }
+
+    private func settingsDots(after count: Int) -> some View {
+        // Inside the docked pill the dots keep to the tiles' width, so they don't widen it.
+        SettingsDots(action: openSettings, width: docked ? ModuleTile.width : 56)
+            .reveal(rank: count / 2 + 1, delay: 0.8, scale: 0.8)
     }
 
     /// A note or time being typed keeps its card open after the pointer leaves.
@@ -92,18 +107,28 @@ struct CompactBar: View {
     private var pill: some View {
         GeometryReader { proxy in
             let open = revealed || reduceMotion
-            Capsule(style: .continuous)
-                .fill(LinearGradient(colors: [Color(white: 0.15), Color(white: 0.07)], startPoint: .top, endPoint: .bottom))
-                .overlay(
+            Group {
+                if glass && glassAvailable {
+                    let shape = docked ? AnyShape(SideNotchShape(edge: prefs.edge, shoulder: Self.shoulder, corner: 26))
+                                       : AnyShape(Capsule(style: .continuous))
+                    Color.clear.surface(shape, glass: true) { EmptyView() }
+                } else if docked {
+                    SideNotchShape(edge: prefs.edge, shoulder: Self.shoulder, corner: 26).fill(.black)
+                } else {
                     Capsule(style: .continuous)
-                        .strokeBorder(LinearGradient(colors: [.white.opacity(0.22), .white.opacity(0.04)], startPoint: .top, endPoint: .bottom), lineWidth: 0.8)
-                )
-                .shadow(color: .black.opacity(0.5), radius: 14, y: 8)
-                .frame(height: open ? proxy.size.height : proxy.size.width)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .animation(Reveal.unfold, value: revealed)
-                .opacity(revealed ? 1 : 0)
-                .animation(.easeOut(duration: 0.6), value: revealed)
+                        .fill(LinearGradient(colors: [Color(white: 0.15), Color(white: 0.07)], startPoint: .top, endPoint: .bottom))
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .strokeBorder(LinearGradient(colors: [.white.opacity(0.22), .white.opacity(0.04)], startPoint: .top, endPoint: .bottom), lineWidth: 0.8)
+                        )
+                }
+            }
+            .shadow(color: .black.opacity(0.5), radius: 14, y: 8)
+            .frame(height: open ? proxy.size.height : proxy.size.width)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(Reveal.unfold, value: revealed)
+            .opacity(revealed ? 1 : 0)
+            .animation(.easeOut(duration: 0.6), value: revealed)
         }
     }
 
@@ -159,13 +184,14 @@ private struct TileDrag {
 /// The "•••" under the pill; a generous hit area since it sits on the bare desktop.
 private struct SettingsDots: View {
     let action: () -> Void
+    var width: CGFloat = 56
     @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 4) {
             ForEach(0..<3, id: \.self) { _ in Circle().fill(hovering ? Theme.accent : Theme.ink).frame(width: 5, height: 5) }
         }
-        .frame(width: 56, height: 30)
+        .frame(width: width, height: 30)
         .background(Capsule().fill(.black.opacity(hovering ? 0.45 : 0.02)))
         .contentShape(Capsule())
         .shadow(color: .black.opacity(0.6), radius: 4)
@@ -186,11 +212,12 @@ private struct TileBounds: PreferenceKey {
 /// A dotted progress ring around the module's icon, with a short value underneath. Also used by the notch's modules tab.
 struct ModuleTile: View {
     static let height: CGFloat = 64
+    static let width: CGFloat = 46
 
     let module: Module
     var highlighted = false
     var pinned = false
-    var width: CGFloat = 46
+    var width: CGFloat = ModuleTile.width
 
     @Environment(SystemMonitor.self) private var system
     @Environment(AIUsage.self) private var usage

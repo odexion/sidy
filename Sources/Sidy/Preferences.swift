@@ -133,6 +133,10 @@ final class Preferences {
     /// Off makes Sidy a notch-only (or menu-bar-only) app.
     var sidebar: Bool { didSet { defaults.set(sidebar, forKey: "sidebar"); onLayoutChange?() } }
     var edge: SidebarEdge { didSet { defaults.set(edge.rawValue, forKey: "edge"); onLayoutChange?() } }
+    /// Tucks the sidebar past its edge until the pointer touches that edge, like the Dock.
+    var autoHide: Bool { didSet { defaults.set(autoHide, forKey: "autoHide"); onLayoutChange?() } }
+    /// Liquid glass for the pill and the cards, on macOS 26 and later.
+    var glass: Bool { didSet { defaults.set(glass, forKey: "glass") } }
     var showHeader: Bool { didSet { defaults.set(showHeader, forKey: "showHeader") } }
     var detailed: Bool { didSet { defaults.set(detailed, forKey: "detailed") } }
     /// Music controls in a panel that grows out of the camera notch.
@@ -157,6 +161,8 @@ final class Preferences {
         hidden = Set((defaults.stringArray(forKey: "hidden") ?? []).compactMap(Module.init)).union(added.filter(Module.optIn.contains))
         sidebar = defaults.object(forKey: "sidebar") as? Bool ?? true
         edge = SidebarEdge(rawValue: defaults.string(forKey: "edge") ?? "") ?? .right
+        autoHide = defaults.bool(forKey: "autoHide")
+        glass = defaults.bool(forKey: "glass")
         showHeader = defaults.object(forKey: "showHeader") as? Bool ?? true
         detailed = defaults.bool(forKey: "detailed")
         notch = defaults.bool(forKey: "notch")

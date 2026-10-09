@@ -11,6 +11,8 @@ struct Sidebar: View {
     var animated = true
     @Environment(AIUsage.self) private var usage
     @Environment(Preferences.self) private var prefs
+    @Environment(AutoHide.self) private var autoHide
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var revealed = false
 
     var body: some View {
@@ -18,11 +20,17 @@ struct Sidebar: View {
             if prefs.detailed {
                 grid
             } else {
-                CompactBar(openSettings: openSettings, pinned: pinned).padding(Self.margin)
+                // Auto-hide docks the pill flush against its edge, like the notch hangs from the top.
+                CompactBar(openSettings: openSettings, pinned: pinned)
+                    .padding(prefs.autoHide ? [.vertical, prefs.edge == .left ? .trailing : .leading] : .all, Self.margin)
             }
         }
+        // Auto-hide keeps the sidebar out while the pointer is on it, not just anywhere in its strip.
+        .onHover { autoHide.overContent = $0 }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: prefs.edge == .left ? .leading : .trailing)
+        .modifier(Tuck(tucked: autoHide.tucked, edge: prefs.edge, reduceMotion: reduceMotion))
         .environment(\.revealed, revealed || !animated)
+        .environment(\.glass, prefs.glass)
         .onAppear {
             // A beat after launch, so startup work settles before anything moves.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { revealed = true }
@@ -83,5 +91,26 @@ private struct Header: View {
         }
         .padding(.leading, 4)
         .shadow(color: .black.opacity(0.6), radius: 6)
+    }
+}
+
+/// Auto-hide's slide: out past the screen edge and back in on a soft spring, like the Dock.
+private struct Tuck: ViewModifier {
+    /// Glides out and settles without overshooting, which would pull it off the edge and show a gap,
+    /// then slips away a little quicker than it came.
+    static let show = Animation.spring(duration: 0.4, bounce: 0)
+    static let hide = Animation.timingCurve(0.4, 0, 0.7, 0.4, duration: 0.3)
+
+    let tucked: Bool
+    let edge: SidebarEdge
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        // A little past the panel's width so the pill's shadow goes too.
+        let distance = (Sidebar.maxWidth + 30) * (edge == .left ? -1 : 1)
+        content
+            .offset(x: tucked && !reduceMotion ? distance : 0)
+            .opacity(tucked && reduceMotion ? 0 : 1)
+            .animation(tucked ? Self.hide : Self.show, value: tucked)
     }
 }

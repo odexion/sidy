@@ -63,6 +63,12 @@ struct SettingsView: View {
                     settingRow("Screen edge") {
                         SegmentedPicker(selection: $prefs.edge, options: [(.left, "Left"), (.right, "Right")])
                     }
+                    settingRow("Auto-hide") { Toggle("", isOn: $prefs.autoHide) }
+                        .help("Tucks the sidebar off the screen edge; push the pointer against that edge to slide it back in")
+                    if glassAvailable {
+                        settingRow("Liquid glass") { Toggle("", isOn: $prefs.glass) }
+                            .help("Glass in place of the dark pill and cards")
+                    }
                     settingRow("Detailed style") { Toggle("", isOn: $prefs.detailed) }
                     if prefs.detailed {
                         settingRow("Show header", nested: true) { Toggle("", isOn: $prefs.showHeader) }

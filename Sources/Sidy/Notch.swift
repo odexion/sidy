@@ -967,6 +967,23 @@ struct NotchShape: Shape {
     }
 }
 
+/// The notch outline turned on its side, for the sidebar docked against a screen edge: shoulders curve out
+/// into the edge above and below, and the far corners are rounded.
+struct SideNotchShape: Shape {
+    var edge: SidebarEdge
+    var shoulder: CGFloat
+    var corner: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        // Drawn upright with the screen edge on top, then turned so the top lies along the side.
+        let upright = NotchShape(top: shoulder, bottom: corner).path(in: CGRect(x: 0, y: 0, width: rect.height, height: rect.width))
+        let turn = edge == .left
+            ? CGAffineTransform(a: 0, b: 1, c: 1, d: 0, tx: rect.minX, ty: rect.minY)
+            : CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: rect.maxX, ty: rect.minY)
+        return upright.applying(turn)
+    }
+}
+
 private extension AnyTransition {
     /// Contents fade, sharpen and grow in from the notch, like the sidebar's opening animation.
     static var notchContent: AnyTransition {

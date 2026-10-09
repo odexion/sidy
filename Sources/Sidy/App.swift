@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let clocks = Clocks()
     let notes = Notes()
     let agents = Agents()
+    let autoHide = AutoHide()
 
     private var panel: SidebarPanel!
     private lazy var notch = NotchController(prefs: prefs) { [unowned self] size, events in
@@ -66,10 +67,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        // SIDY_FLOATING=1 keeps the panel above windows, handy while developing.
-        panel.level = ProcessInfo.processInfo.environment["SIDY_FLOATING"] != nil
-            ? .floating : NSWindow.Level(Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        autoHide.isBusy = { [weak self] in self?.notes.editing == true || self?.clocks.editing != nil }
+        // Tucked away, the empty panel shouldn't catch clicks meant for the windows it now floats over.
+        autoHide.onChange = { [weak self] in
+            guard let self else { return }
+            panel.ignoresMouseEvents = autoHide.tucked
+        }
         // Size the panel first: a layout at zero size would make the opening animation fly in from a corner.
         placePanel()
         panel.contentView = NSHostingView(rootView: sidebar())
@@ -155,6 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .environment(media)
             .environment(clocks)
             .environment(notes)
+            .environment(autoHide)
     }
 
     /// A full-height transparent strip on the chosen edge; empty areas pass clicks through.
@@ -164,6 +169,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let width = Sidebar.maxWidth
         let x = prefs.edge == .left ? area.minX : area.maxX - width
         panel.setFrame(NSRect(x: x, y: area.minY, width: width, height: area.height), display: true)
+        // Auto-hide pops out over windows like the Dock; otherwise the sidebar sits on the desktop beneath them.
+        // SIDY_FLOATING=1 keeps the panel above windows, handy while developing.
+        panel.level = prefs.autoHide || ProcessInfo.processInfo.environment["SIDY_FLOATING"] != nil
+            ? .floating : NSWindow.Level(Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
+        autoHide.frame = panel.frame
+        autoHide.edge = prefs.edge
+        autoHide.enabled = prefs.sidebar && prefs.autoHide
         if prefs.sidebar { panel.orderFrontRegardless() } else { panel.orderOut(nil) }
     }
 

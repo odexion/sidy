@@ -27,6 +27,10 @@ curl -fsSL https://raw.githubusercontent.com/odexion/sidy/main/scripts/install.s
 
 Sidy sits on the edge of your desktop as a slim pill of gauges. Hover a tile to see its detailed card, or click the tile to pin the card open.
 
+Turn on **Auto-hide** in Settings → Sidebar to keep it tucked off the screen edge, like the Dock: push the pointer against that edge and it slides out over your windows, then slips away again when you move off it.
+
+On macOS 26 and later, **Liquid glass** in Settings → Sidebar swaps the dark pill and cards for glass.
+
 ## What it shows
 
 | Section | Details |
