@@ -33,7 +33,6 @@ enum Agent: String, CaseIterable, Codable {
 enum AgentHooks {
     /// Marks Sidy's own hook commands, so they can be found and removed without touching anyone else's.
     static let marker = "--sidy-hook"
-    static let notification = Notification.Name("com.odexion.sidy.agent")
 
     /// Installs or removes the hooks. Returns a message when that couldn't be done.
     static func set(_ agent: Agent, enabled: Bool) -> String? {
@@ -71,7 +70,7 @@ enum AgentHooks {
 
     /// JSON.parse and JSON.stringify keep the file's key order and match the CLIs' own two-space formatting,
     /// so the edit only shows up as Sidy's entries.
-    private static func rewrite(_ text: String, command: String, events: [(String, String?)], enabled: Bool) -> String? {
+    static func rewrite(_ text: String, command: String, events: [(String, String?)], enabled: Bool) -> String? {
         guard let context = JSContext() else { return nil }
         var failed = false
         context.exceptionHandler = { _, _ in failed = true }
@@ -118,7 +117,7 @@ enum AgentHooks {
         info["app"] = ProcessInfo.processInfo.environment["__CFBundleIdentifier"]
         // Hooks run side by side and can arrive out of order; the time lets Sidy drop stale ones.
         info["time"] = String(Date().timeIntervalSince1970)
-        DistributedNotificationCenter.default().postNotificationName(notification, object: nil, userInfo: info, deliverImmediately: true)
+        AgentSocket.send(info)
     }
 }
 
@@ -191,7 +190,8 @@ final class Agents {
     }
     /// The latest finish or call for attention, for the notch to announce.
     private(set) var announcement: Announcement?
-    @ObservationIgnored private var observer: NSObjectProtocol?
+    @ObservationIgnored private var listener: DispatchSourceRead?
+    @ObservationIgnored private var sweeper: Timer?
 
     var working: AgentSession? { sessions.first { $0.state == .working } }
 
@@ -216,8 +216,12 @@ final class Agents {
     }
 
     func start() {
-        observer = DistributedNotificationCenter.default().addObserver(forName: AgentHooks.notification, object: nil, queue: .main) { [weak self] note in
-            self?.receive(note.userInfo ?? [:])
+        listener = AgentSocket.listen { [weak self] in self?.receive($0) }
+        // A session whose terminal closed mid-reply never reports again, so look for those now and then too.
+        sweeper = Timer.scheduledTimer(withTimeInterval: 10 * 60, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            let tidied = Self.tidy(sessions)
+            if tidied.count != sessions.count { sessions = tidied }
         }
     }
 
@@ -231,22 +235,21 @@ final class Agents {
 
     /// Keeps finished replies until they're removed, but drops sessions stuck "working" or "waiting" for hours,
     /// e.g. a terminal closed mid-reply, which never sends its finish.
-    private static func tidy(_ sessions: [AgentSession]) -> [AgentSession] {
+    static func tidy(_ sessions: [AgentSession]) -> [AgentSession] {
         Array(sessions.filter { $0.state == .done || $0.state == .failed || $0.since.timeIntervalSinceNow > -2 * 3600 }.prefix(12))
     }
 
-    private func receive(_ info: [AnyHashable: Any]) {
-        guard let agent = (info["agent"] as? String).flatMap(Agent.init),
-              let id = info["session"] as? String, let event = info["event"] as? String else { return }
-        let cwd = info["cwd"] as? String
+    func receive(_ info: [String: String]) {
+        guard let agent = info["agent"].flatMap(Agent.init), let id = info["session"], let event = info["event"] else { return }
+        let cwd = info["cwd"]
         var session = self.session(id) ?? AgentSession(id: id, agent: agent, project: "", state: .working, since: Date())
-        let time = (info["time"] as? String).flatMap(Double.init) ?? Date().timeIntervalSince1970
+        let time = info["time"].flatMap(Double.init) ?? Date().timeIntervalSince1970
         guard time >= session.updated else { return }
         session.updated = time
         if let cwd { session.project = URL(fileURLWithPath: cwd).lastPathComponent }
-        session.app = info["app"] as? String ?? session.app
+        session.app = info["app"] ?? session.app
         session.since = Date()
-        session.message = info["message"] as? String
+        session.message = info["message"]
         var announce = true
         switch event {
         case "UserPromptSubmit":
