@@ -44,6 +44,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let replayItem = NSMenuItem(title: "Replay Opening Animation", action: #selector(replayAnimation), keyEquivalent: "")
     private var settingsWindow: NSWindow?
     private var snapshotPinned: Module?
+    /// The sidebar is out and holds a live gauge; whether it's covered by windows is checked separately.
+    private var sidebarGauges = false
 
     func applicationDidFinishLaunching(_ note: Notification) {
         registerFont()
@@ -78,6 +80,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Size the panel first: a layout at zero size would make the opening animation fly in from a corner.
         placePanel()
         panel.contentView = NSHostingView(rootView: sidebar())
+        watchSidebarGauges()
+        NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: panel, queue: .main) { [weak self] _ in
+            self?.pace()
+        }
+        let workspace = NSWorkspace.shared.notificationCenter
+        workspace.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.system.displaysAsleep = true
+            self?.usage.paused = true
+        }
+        workspace.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.system.displaysAsleep = false
+            self?.usage.paused = false
+        }
 
         // Clicking away from a note ends editing, which lets its card close.
         NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: panel, queue: .main) { [weak self] _ in
@@ -128,6 +143,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updater.onChange = { [weak self] in self?.showUpdateState() }
         showUpdateState()
         updater.start()
+    }
+
+    /// Follows whether the sidebar shows live gauges, so the system monitor can slow down when it doesn't.
+    private func watchSidebarGauges() {
+        sidebarGauges = withObservationTracking {
+            prefs.sidebar && !autoHide.tucked && prefs.visible.contains(where: \.isLiveGauge)
+        } onChange: {
+            DispatchQueue.main.async { [weak self] in self?.watchSidebarGauges() }
+        }
+        pace()
+    }
+
+    /// A sidebar under full-screen or maximized windows shows nothing, even with gauges in it.
+    private func pace() {
+        system.sidebarWatching = sidebarGauges && panel.occlusionState.contains(.visible)
     }
 
     private func showUpdateState() {

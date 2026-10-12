@@ -12,6 +12,9 @@ enum Module: String, CaseIterable, Identifiable {
     /// Shows plan limits that can be refreshed on demand.
     var showsUsage: Bool { self == .claude || self == .codex }
 
+    /// Shows readings that change from second to second, so the system is sampled quickly while it is on screen.
+    var isLiveGauge: Bool { [.cpu, .gpu, .memory, .network, .system].contains(self) }
+
     var title: String {
         switch self {
         case .cpu: "CPU Load"

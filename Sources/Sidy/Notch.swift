@@ -60,6 +60,7 @@ struct NotchView: View {
     @Environment(Preferences.self) private var prefs
     @Environment(Clocks.self) private var clocks
     @Environment(AIUsage.self) private var usage
+    @Environment(SystemMonitor.self) private var system
     @Environment(Agents.self) private var agents
     @State private var phase: Phase
     @State private var tab: Tab
@@ -439,6 +440,8 @@ struct NotchView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear(perform: system.watch)
+        .onDisappear(perform: system.unwatch)
     }
 
     private var clocksPage: some View {

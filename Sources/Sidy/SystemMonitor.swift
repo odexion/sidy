@@ -11,7 +11,8 @@ struct BatteryInfo {
     var minutesRemaining: Int?
 }
 
-/// Samples CPU, GPU, memory, disk, network, battery and thermals every two seconds.
+/// Samples CPU, GPU, memory, disk, network, battery and thermals every two seconds while something shows them.
+/// Otherwise it only keeps the battery and disk current for the notch's alerts, and stops while the displays sleep.
 @Observable
 final class SystemMonitor {
     static let historyLength = 20
@@ -34,16 +35,54 @@ final class SystemMonitor {
     let cores = ProcessInfo.processInfo.activeProcessorCount
     let bootDate = SystemMonitor.readBootDate()
 
-    private let interval = 2.0
-    private var timer: Timer?
-    private var tick = 0
-    private var previousCPU: (busy: Double, total: Double)?
-    private var previousNet: [String: (rx: UInt32, tx: UInt32)] = [:]
+    /// The sidebar is out and shows a live gauge. Set by the app.
+    @ObservationIgnored var sidebarWatching = true { didSet { pace() } }
+    @ObservationIgnored var displaysAsleep = false { didSet { pace() } }
+    /// Views on screen that show live gauges, such as the notch's modules tab.
+    @ObservationIgnored private var watchers = 0
+
+    private static let liveInterval = 2.0
+    private static let idleInterval = 60.0
+    @ObservationIgnored private var timer: Timer?
+    @ObservationIgnored private var live = false
+    @ObservationIgnored private var tick = 0
+    @ObservationIgnored private var previousCPU: (busy: Double, total: Double)?
+    @ObservationIgnored private var previousNet: (at: Date, counters: [String: (rx: UInt32, tx: UInt32)])?
 
     func start() {
-        sample()
-        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in self?.sample() }
         watchPower()
+        NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.thermal = ProcessInfo.processInfo.thermalState
+        }
+        pace()
+    }
+
+    /// How often it samples right now; nil while stopped.
+    var interval: TimeInterval? { timer?.timeInterval }
+
+    func watch() { watchers += 1; pace() }
+    func unwatch() { watchers = max(watchers - 1, 0); pace() }
+
+    /// Picks the sampling rate for what is on screen, and samples right away when gauges come back into view.
+    private func pace() {
+        guard !displaysAsleep else {
+            timer?.invalidate()
+            timer = nil
+            return
+        }
+        let wanted = sidebarWatching || watchers > 0
+        guard timer == nil || wanted != live else { return }
+        live = wanted
+        timer?.invalidate()
+        // Rates and load measured across the pause would be averages over it, not what's happening now.
+        previousCPU = nil
+        previousNet = nil
+        tick = 0
+        sample()
+        timer = Timer.scheduledTimer(withTimeInterval: live ? Self.liveInterval : Self.idleInterval, repeats: true) { [weak self] _ in
+            self?.sample()
+        }
+        timer?.tolerance = live ? 0.2 : 10
     }
 
     /// Plugging in or unplugging updates the battery right away instead of at the next slow sample.
@@ -58,6 +97,13 @@ final class SystemMonitor {
     }
 
     private func sample() {
+        defer { tick += 1 }
+        thermal = ProcessInfo.processInfo.thermalState
+        guard live else {
+            sampleDisk()
+            battery = sampleBattery()
+            return
+        }
         if let value = sampleCPU() { cpu = value; push(value, to: &cpuHistory) }
         if let value = sampleGPU() { gpu = value; push(value, to: &gpuHistory) }
         memoryUsed = sampleMemory()
@@ -66,9 +112,7 @@ final class SystemMonitor {
             sampleDisk()
             battery = sampleBattery()
         }
-        thermal = ProcessInfo.processInfo.thermalState
         getloadavg(&loadAverage, 3)
-        tick += 1
     }
 
     private func push(_ value: Double, to history: inout [Double]) {
@@ -167,17 +211,19 @@ final class SystemMonitor {
             let name = String(cString: entry.ifa_name)
             guard name.hasPrefix("en") else { continue }
             current[name] = (data.ifi_ibytes, data.ifi_obytes)
-            if let previous = previousNet[name] {
+            if let previous = previousNet?.counters[name] {
                 rx += UInt64(data.ifi_ibytes &- previous.rx)
                 tx += UInt64(data.ifi_obytes &- previous.tx)
             }
         }
-        let hadPrevious = !previousNet.isEmpty
-        previousNet = current
-        guard hadPrevious else { return }
+        let now = Date()
+        defer { previousNet = (now, current) }
+        guard let previous = previousNet else { return }
+        let seconds = now.timeIntervalSince(previous.at)
+        guard seconds > 0.5 else { return }
 
-        download = Double(rx) / interval
-        upload = Double(tx) / interval
+        download = Double(rx) / seconds
+        upload = Double(tx) / seconds
         push(download, to: &downloadHistory)
         push(upload, to: &uploadHistory)
     }

@@ -22,11 +22,17 @@ final class AIUsage {
 
     private var timer: Timer?
     @ObservationIgnored private var refreshed = Date.distantPast
+    /// While the displays sleep nobody sees the limits, so the regular refresh waits and catches up on wake.
+    @ObservationIgnored var paused = false {
+        didSet { if !paused { refreshIfStale(300) } }
+    }
     @ObservationIgnored private var retrying = false
 
     func start() {
         refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in self?.refresh() }
+        timer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
+            if self?.paused == false { self?.refresh() }
+        }
     }
 
     /// Refreshes unless the last refresh is recent, e.g. when the notch's usage tab opens.
