@@ -15,6 +15,12 @@ let package = Package(
             path: "Sources/Sidy",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        .testTarget(
+            name: "SidyTests",
+            dependencies: ["Sidy"],
+            path: "Tests/SidyTests",
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .target(
             name: "MediaBridge",
             path: "Sources/MediaBridge",

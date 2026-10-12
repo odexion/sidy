@@ -74,7 +74,7 @@ final class AIUsage {
         }
     }
 
-    private struct Snapshot {
+    struct Snapshot {
         var windows: [LimitWindow]
         var plan: String?
     }
@@ -92,14 +92,15 @@ final class AIUsage {
             "Authorization": "Bearer \(token)",
             "anthropic-beta": "oauth-2025-04-20",
         ])
-        return json.map { json in
-            let windows = [("5h", json["five_hour"]), ("7d", json["seven_day"])].compactMap { label, value -> LimitWindow? in
-                guard let dict = value as? [String: Any], let used = number(dict["utilization"]) else { return nil }
-                return LimitWindow(label: label, used: min(used / 100, 1), resetsAt: parseDate(dict["resets_at"] as? String))
-            }
-            return Snapshot(windows: windows)
+        return json.flatMap { claudeSnapshot($0).map(Result.success) ?? .failure(Failure(message: "Unexpected response")) }
+    }
+
+    static func claudeSnapshot(_ json: [String: Any]) -> Snapshot? {
+        let windows = [("5h", json["five_hour"]), ("7d", json["seven_day"])].compactMap { label, value -> LimitWindow? in
+            guard let dict = value as? [String: Any], let used = number(dict["utilization"]) else { return nil }
+            return LimitWindow(label: label, used: min(used / 100, 1), resetsAt: parseDate(dict["resets_at"] as? String))
         }
-        .flatMap { $0.windows.isEmpty ? .failure(Failure(message: "Unexpected response")) : .success($0) }
+        return windows.isEmpty ? nil : Snapshot(windows: windows)
     }
 
     private static func claudeToken() -> String? {
@@ -134,17 +135,18 @@ final class AIUsage {
         var headers = ["Authorization": "Bearer \(token)", "User-Agent": "codex_cli_rs"]
         headers["ChatGPT-Account-Id"] = tokens["account_id"] as? String
         let json = await get("https://chatgpt.com/backend-api/wham/usage", app: "Codex", headers: headers)
-        return json.map { json in
-            let limits = json["rate_limit"] as? [String: Any] ?? [:]
-            let windows = ["primary_window", "secondary_window"].compactMap { key -> LimitWindow? in
-                guard let dict = limits[key] as? [String: Any], let used = number(dict["used_percent"]) else { return nil }
-                let reset = number(dict["reset_at"]).map { Date(timeIntervalSince1970: $0) }
-                return LimitWindow(label: windowLabel(number(dict["limit_window_seconds"]) ?? 0),
-                                   used: min(used / 100, 1), resetsAt: reset)
-            }
-            return Snapshot(windows: windows, plan: json["plan_type"] as? String)
+        return json.flatMap { codexSnapshot($0).map(Result.success) ?? .failure(Failure(message: "Unexpected response")) }
+    }
+
+    static func codexSnapshot(_ json: [String: Any]) -> Snapshot? {
+        let limits = json["rate_limit"] as? [String: Any] ?? [:]
+        let windows = ["primary_window", "secondary_window"].compactMap { key -> LimitWindow? in
+            guard let dict = limits[key] as? [String: Any], let used = number(dict["used_percent"]) else { return nil }
+            let reset = number(dict["reset_at"]).map { Date(timeIntervalSince1970: $0) }
+            return LimitWindow(label: windowLabel(number(dict["limit_window_seconds"]) ?? 0),
+                               used: min(used / 100, 1), resetsAt: reset)
         }
-        .flatMap { $0.windows.isEmpty ? .failure(Failure(message: "Unexpected response")) : .success($0) }
+        return windows.isEmpty ? nil : Snapshot(windows: windows, plan: json["plan_type"] as? String)
     }
 
     private static func windowLabel(_ seconds: Double) -> String {
