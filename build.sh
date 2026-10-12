@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-VERSION=${SIDY_VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')}
+VERSION=${SIDY_VERSION:-$( (git describe --tags --abbrev=0 2>/dev/null || true) | sed 's/^v//')}
 VERSION=${VERSION:-0.0.0}
 # Grows with every commit, which is all CFBundleVersion needs.
 BUILD=$(git rev-list --count HEAD)
