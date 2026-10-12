@@ -146,11 +146,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Follows whether the sidebar shows live gauges, so the system monitor can slow down when it doesn't.
-    private func watchSidebarGauges() {
+    func watchSidebarGauges() {
         sidebarGauges = withObservationTracking {
             prefs.sidebar && !autoHide.tucked && prefs.visible.contains(where: \.isLiveGauge)
         } onChange: {
-            DispatchQueue.main.async { [weak self] in self?.watchSidebarGauges() }
+            // The delegate lives as long as the app, and reaching it through Main keeps it out of this @Sendable closure.
+            DispatchQueue.main.async { Main.delegate.watchSidebarGauges() }
         }
         pace()
     }
