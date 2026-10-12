@@ -1,12 +1,15 @@
 #!/bin/zsh
 # Builds Sidy.app (Apple silicon) into ./build.
 #   --install  replace the installed copy (in /Applications, like the installer) and launch it
-#   --release  also zip it as build/Sidy-<version>-arm64.zip
+#   --release  also zip it as build/Sidy-<version>-arm64.zip and sign the zip for the updater
+# The version comes from the latest git tag, or from SIDY_VERSION (scripts/release.sh sets it).
 set -euo pipefail
 cd "$(dirname "$0")"
 
-VERSION=1.7.1
-BUILD=16
+VERSION=${SIDY_VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')}
+VERSION=${VERSION:-0.0.0}
+# Grows with every commit, which is all CFBundleVersion needs.
+BUILD=$(git rev-list --count HEAD)
 
 swift build -c release --arch arm64 --product Sidy
 swift build -c release --arch arm64 --product MediaBridge
@@ -49,7 +52,8 @@ for arg in "$@"; do
         ZIP="build/Sidy-$VERSION-arm64.zip"
         rm -f "$ZIP"
         ditto -c -k --keepParent "$APP" "$ZIP"
-        echo "Packaged $ZIP"
+        swift scripts/sign-update.swift sign "$ZIP" > "$ZIP.sig"
+        echo "Packaged and signed $ZIP"
         ;;
     --install)
         # Same place as scripts/install.sh, so this replaces the copy macOS actually launches.

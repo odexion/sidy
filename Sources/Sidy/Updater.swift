@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 
 /// Checks GitHub for a newer release and installs it in place of the running app.
 final class Updater {
@@ -9,11 +10,14 @@ final class Updater {
     }
 
     private static let latestRelease = URL(string: "https://api.github.com/repos/odexion/sidy/releases/latest")!
+    /// Releases are signed with the matching private key (scripts/sign-update.swift), and anything else is refused,
+    /// so a tampered release or download can't replace the app.
+    static let publicKey = "GnKRzUqmkLoUTiAdntN4MK6ti25Gh14eTesiLxaAHHg="
 
     private(set) var state = State.idle { didSet { if state != oldValue { onChange?() } } }
     var onChange: (() -> Void)?
 
-    private var assetURL: URL?
+    private var release: Release?
     private var timer: Timer?
 
     private var current: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0" }
@@ -40,7 +44,7 @@ final class Updater {
                 if manual { alert("Sidy is up to date", "You have the latest version, \(current).") }
                 return
             }
-            assetURL = release.asset
+            self.release = release
             state = .available(version: version)
             if manual, alert("Sidy \(version) is available", "You have \(current). Sidy will restart to finish updating.",
                              buttons: ["Restart to Update", "Later"]) {
@@ -62,7 +66,7 @@ final class Updater {
 
     /// Downloads the release, then quits; a detached script swaps the bundle once Sidy has exited and relaunches it.
     func install() {
-        guard case .available = state, let assetURL, let bundle else { return }
+        guard case .available = state, let release, let bundle else { return }
         guard FileManager.default.isWritableFile(atPath: bundle.deletingLastPathComponent().path) else {
             NSWorkspace.shared.open(URL(string: "https://github.com/odexion/sidy/releases/latest")!)
             return
@@ -73,9 +77,13 @@ final class Updater {
             do {
                 let work = FileManager.default.temporaryDirectory.appending(path: "sidy-update-\(UUID().uuidString)")
                 try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
-                let (download, _) = try await URLSession.shared.download(from: assetURL)
+                let (signature, _) = try await URLSession.shared.data(from: release.signature)
+                let (download, _) = try await URLSession.shared.download(from: release.asset)
                 let zip = work.appending(path: "Sidy.zip")
                 try FileManager.default.moveItem(at: download, to: zip)
+                guard Self.verify(try Data(contentsOf: zip), signature: signature) else {
+                    throw Failure("The download didn't match Sidy's signature, so it wasn't installed.")
+                }
                 try Self.run("/usr/bin/ditto", ["-x", "-k", zip.path, work.appending(path: "unpacked").path])
                 let fresh = work.appending(path: "unpacked/Sidy.app")
                 guard Bundle(url: fresh)?.bundleIdentifier == Bundle.main.bundleIdentifier else { throw CocoaError(.fileReadCorruptFile) }
@@ -116,7 +124,25 @@ final class Updater {
         guard process.terminationStatus == 0 else { throw CocoaError(.fileReadCorruptFile) }
     }
 
-    private static func fetchLatest() async -> (tag: String, asset: URL)? {
+    struct Release {
+        var tag: String
+        var asset: URL
+        var signature: URL
+    }
+
+    private struct Failure: LocalizedError {
+        let errorDescription: String?
+        init(_ message: String) { errorDescription = message }
+    }
+
+    static func verify(_ data: Data, signature: Data) -> Bool {
+        guard let key = Data(base64Encoded: publicKey).flatMap({ try? Curve25519.Signing.PublicKey(rawRepresentation: $0) }),
+              let raw = Data(base64Encoded: String(decoding: signature, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines))
+        else { return false }
+        return key.isValidSignature(raw, for: data)
+    }
+
+    private static func fetchLatest() async -> Release? {
         var request = URLRequest(url: latestRelease)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         guard let (data, response) = try? await URLSession.shared.data(for: request),
@@ -124,10 +150,16 @@ final class Updater {
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let tag = json["tag_name"] as? String,
               let assets = json["assets"] as? [[String: Any]],
-              let link = assets.compactMap({ $0["browser_download_url"] as? String }).first(where: { $0.hasSuffix("-arm64.zip") }),
-              let asset = URL(string: link)
+              let release = release(tag: tag, links: assets.compactMap { $0["browser_download_url"] as? String })
         else { return nil }
-        return (tag, asset)
+        return release
+    }
+
+    /// The app's zip and its signature. A release without a signature is skipped.
+    static func release(tag: String, links: [String]) -> Release? {
+        guard let link = links.first(where: { $0.hasSuffix("-arm64.zip") }), links.contains(link + ".sig"),
+              let asset = URL(string: link), let signature = URL(string: link + ".sig") else { return nil }
+        return Release(tag: tag, asset: asset, signature: signature)
     }
 
     static func isNewer(_ version: String, than current: String) -> Bool {
