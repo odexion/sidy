@@ -27,9 +27,9 @@ curl -fsSL https://raw.githubusercontent.com/odexion/sidy/main/scripts/install.s
 
 Sidy sits on the edge of your desktop as a slim pill of gauges. Hover a tile to see its detailed card, or click the tile to pin the card open.
 
-Turn on **Auto-hide** in Settings → Sidebar → Appearance to keep it tucked off the screen edge, like the Dock: push the pointer against that edge and it slides out over your windows, then slips away again when you move off it.
+By default it sits on the left edge with **Auto-hide** on (Settings → Sidebar → Appearance), tucked off the screen edge like the Dock: push the pointer against that edge and it slides out over your windows, then slips away again when you move off it.
 
-On macOS 26 and later, **Liquid glass** in Settings → Sidebar → Appearance swaps the dark pill and cards for glass.
+On macOS 26 and later the pill and cards use **Liquid glass**; turn it off in Settings → Sidebar → Appearance for the dark look.
 
 ## What it shows
 
@@ -57,7 +57,7 @@ On macOS 26 and later, **Liquid glass** in Settings → Sidebar → Appearance s
   <img src="docs/notch-music.png" width="560" alt="The open notch on its music tab, with dotted album art, the seek bar and controls">
 </p>
 
-Turn it on in **Settings → Notch**, or with **Show Notch** in the menu bar menu. Music lives in the notch: while a track is loaded, the notch widens to show the album art in dots and a small equalizer. New tracks peek out underneath for a moment. Hover the notch to drop it open on the music tab, with the seek bar and controls. Other tabs hold the timer and alarm controls, and, if you turn them on, your sidebar's gauges and your AI agent sessions. The `•••` beside them opens the notch's settings.
+It starts on; turn it off in **Settings → Notch**, or with **Show Notch** in the menu bar menu. Music lives in the notch: while a track is loaded, the notch widens to show the album art in dots and a small equalizer. New tracks peek out underneath for a moment. Hover the notch to drop it open on the music tab, with the seek bar and controls. Other tabs hold the timer and alarm controls, and, if you turn them on, your sidebar's gauges and your AI agent sessions. The `•••` beside them opens the notch's settings.
 
 <table>
   <tr>

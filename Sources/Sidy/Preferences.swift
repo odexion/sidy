@@ -229,12 +229,12 @@ final class Preferences {
         // Modules new to this Mac start hidden if they are opt-in. Saving both lists now marks them as seen.
         hidden = Set((defaults.stringArray(forKey: "hidden") ?? []).compactMap(Module.init)).union(added.filter(Module.optIn.contains))
         sidebar = defaults.object(forKey: "sidebar") as? Bool ?? true
-        edge = SidebarEdge(rawValue: defaults.string(forKey: "edge") ?? "") ?? .right
-        autoHide = defaults.bool(forKey: "autoHide")
-        glass = defaults.bool(forKey: "glass")
-        showHeader = defaults.object(forKey: "showHeader") as? Bool ?? true
+        edge = SidebarEdge(rawValue: defaults.string(forKey: "edge") ?? "") ?? .left
+        autoHide = defaults.object(forKey: "autoHide") as? Bool ?? true
+        glass = defaults.object(forKey: "glass") as? Bool ?? true
+        showHeader = defaults.bool(forKey: "showHeader")
         detailed = defaults.bool(forKey: "detailed")
-        notch = defaults.bool(forKey: "notch")
+        notch = defaults.object(forKey: "notch") as? Bool ?? true
         notchDisplay = NotchDisplay(rawValue: defaults.string(forKey: "notch.display") ?? "") ?? .notched
         // Like modules: features this Mac hasn't seen yet start with their default.
         let seen = Set((defaults.stringArray(forKey: "notch.seen") ?? []).compactMap(NotchFeature.init))
